@@ -626,11 +626,55 @@ function MenuSheet({ goal, onEdit, onDelete, onClose }) {
 }
 
 /* ---------- screens ---------- */
-function GoalCard({ goal, onOpen, onMenu }) {
-  const saved = savedOf(goal);
+const LONG_PRESS_MS = 500;   // сколько держать палец / кнопку мыши
+const LONG_PRESS_SLOP = 10;  // сдвиг в пикселях, после которого это уже прокрутка, а не долгое нажатие
+
+function GoalCard({ goal, confirming, onOpen, onAskDelete, onCancelDelete, onDelete }) {
+  const timer = useRef(null);
+  const origin = useRef(null);
+  const fired = useRef(false); // долгое нажатие сработало: ближайший «клик» после отпускания надо проглотить
+
+  const stopTimer = () => { clearTimeout(timer.current); timer.current = null; };
+  useEffect(() => stopTimer, []);
+
+  const onPointerDown = (e) => {
+    if (confirming) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return; // только основная кнопка мыши
+    fired.current = false;
+    origin.current = { x: e.clientX, y: e.clientY };
+    stopTimer();
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      fired.current = true;
+      try { if (navigator.vibrate) navigator.vibrate(50); } catch (err) { /* не поддерживается */ }
+      onAskDelete();
+    }, LONG_PRESS_MS);
+  };
+  const onPointerMove = (e) => {
+    if (!timer.current || !origin.current) return;
+    if (Math.hypot(e.clientX - origin.current.x, e.clientY - origin.current.y) > LONG_PRESS_SLOP) stopTimer(); // это прокрутка
+  };
+  const onClick = () => {
+    if (fired.current) { fired.current = false; return; } // отпустили после долгого нажатия: цель не открываем
+    if (!confirming) onOpen();
+  };
+  const onKeyDown = (e) => {
+    if (confirming) return;
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); }
+    else if (e.key === "Delete") { e.preventDefault(); onAskDelete(); } // то же самое для клавиатуры
+  };
+
+  // клики и нажатия внутри плашки не должны «всплывать» до карточки (иначе откроется просмотр цели)
+  const stop = (e) => e.stopPropagation();
+  const cancel = (e) => { e.stopPropagation(); onCancelDelete(); };
+  const remove = (e) => { e.stopPropagation(); onDelete(); };
+
   return html`
-    <div className="goal-card" role="button" tabIndex="0" onClick=${onOpen}
-         onKeyDown=${(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}>
+    <div className="goal-card" role="button" tabIndex="0"
+         onClick=${onClick} onKeyDown=${onKeyDown}
+         onPointerDown=${onPointerDown} onPointerMove=${onPointerMove}
+         onPointerUp=${stopTimer} onPointerLeave=${stopTimer} onPointerCancel=${stopTimer}
+         onContextMenu=${(e) => e.preventDefault()}>
       <div className="gc-title">${goal.image ? html`<img className="thumb" src=${goal.image} alt="" />` : null}<span className="name">${goal.name}</span><span className="pill">${TYPE_LABEL[goal.type]}</span></div>
       <div className=${"gc-line " + (isLate(goal) ? "late" : "muted")}>
         <${Icon} name="calendar" size=${22} /><span>${periodText(goal)}</span>
@@ -641,16 +685,23 @@ function GoalCard({ goal, onOpen, onMenu }) {
       </div>
       <${RestLine} goal=${goal} />
       <${Icon} name="chevR" size=${24} className="chev" />
-      <button type="button" className="card-menu" aria-label=${"Меню цели «" + goal.name + "»"}
-              onClick=${(e) => { e.stopPropagation(); onMenu(); }}
-              onKeyDown=${(e) => e.stopPropagation()}>
-        <${Icon} name="dots" size=${22} />
-      </button>
+
+      ${confirming && html`
+        <div className="confirm-overlay" role="alertdialog" aria-label="Удалить цель?"
+             onClick=${stop} onPointerDown=${stop} onPointerUp=${stop} onContextMenu=${stop}
+             onKeyDown=${(e) => { e.stopPropagation(); if (e.key === "Escape") onCancelDelete(); }}>
+          <div className="confirm-text"><${Icon} name="trash" size=${26} className="confirm-icon" /><span>Удалить цель?</span></div>
+          <div className="confirm-actions">
+            <button type="button" className="cbtn cbtn-cancel" autoFocus onClick=${cancel}>Отмена</button>
+            <button type="button" className="cbtn cbtn-delete" onClick=${remove}>Удалить</button>
+          </div>
+        </div>
+      `}
     </div>
   `;
 }
 
-function ListScreen({ goals, tab, setTab, onOpen, onMenu, onAdd }) {
+function ListScreen({ goals, tab, setTab, pendingId, onOpen, onAskDelete, onCancelDelete, onDelete, onAdd }) {
   const active = goals.filter((g) => !isDone(g));
   const done = goals.filter(isDone);
   const shown = tab === "active" ? active : done;
@@ -668,7 +719,9 @@ function ListScreen({ goals, tab, setTab, onOpen, onMenu, onAdd }) {
             ${tab === "active" ? "Нажмите «+», чтобы создать цель." : "Здесь будут храниться цели, которые вы успешно завершили."}
           </div>`
         : html`<div className="cards">
-            ${shown.map((g) => html`<${GoalCard} key=${g.id} goal=${g} onOpen=${() => onOpen(g.id)} onMenu=${() => onMenu(g.id)} />`)}
+            ${shown.map((g) => html`<${GoalCard} key=${g.id} goal=${g} confirming=${pendingId === g.id}
+                   onOpen=${() => onOpen(g.id)} onAskDelete=${() => onAskDelete(g.id)}
+                   onCancelDelete=${onCancelDelete} onDelete=${() => onDelete(g.id)} />`)}
           </div>`}
       <button type="button" className="fab" aria-label="Новая цель" onClick=${onAdd}><${Icon} name="plus" size=${28} /></button>
     </div>
@@ -856,12 +909,13 @@ function App() {
   const [screen, setScreen] = useState({ name: "list" });
   const [tab, setTab] = useState("active");
   const [sheet, setSheet] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null); // id карточки в режиме подтверждения удаления
 
   /* ---------- системная кнопка «Назад» (Android WebView) ----------
      Каждый «слой» интерфейса (экран цели, модальное окно) добавляет запись в history.
      Главный экран всегда стоит на «страховочной» записи: даже если пользователь нажмёт «Назад»
      на главном экране, мы тут же возвращаем состояние и WebView не доходит до нулевой точки истории. */
-  const layers = useRef([]);          // стек открытых слоёв: "screen" | "sheet"
+  const layers = useRef([]);          // стек открытых слоёв: "screen" | "sheet" | "confirm"
   const ignorePops = useRef(0);       // сколько popstate вызвано нами самими (программное закрытие)
   const ignoreTimer = useRef(null);
 
@@ -889,6 +943,7 @@ function App() {
         // «Назад» при открытом слое: закрываем его в интерфейсе и больше ничего не делаем
         const top = layers.current.pop();
         if (top === "sheet") setSheet(null);
+        else if (top === "confirm") setPendingDelete(null);
         else setScreen({ name: "list" });
         return;
       }
@@ -909,6 +964,19 @@ function App() {
     celebrate.current = null;
     prevDone.current = now;
   }, [goals]);
+
+  const askDelete = (id) => {
+    if (!layers.current.includes("confirm")) pushLayer("confirm");
+    setPendingDelete(id);
+  };
+  const cancelDelete = () => {
+    if (layers.current[layers.current.length - 1] === "confirm") unwind(1);
+    setPendingDelete(null);
+  };
+  const confirmDelete = (id) => {
+    setPendingDelete(null);
+    deleteGoal(id); // deleteGoal сам снимает все открытые слои, включая «confirm»
+  };
 
   const showSheet = (next) => {
     if (!layers.current.includes("sheet")) pushLayer("sheet");
@@ -1010,9 +1078,9 @@ function App() {
             onMenu=${() => showSheet({ type: "menu", id: goal.id })}
             onAdd=${(amount) => { if (amount > 0) celebrate.current = goal.id; addOp(goal.id, amount, Date.now()); }}
             onDeleteOp=${(opId) => deleteOp(goal.id, opId)} />`
-        : html`<${ListScreen} goals=${goals} tab=${tab} setTab=${setTab}
+        : html`<${ListScreen} goals=${goals} tab=${tab} setTab=${(t) => { cancelDelete(); setTab(t); }}
+            pendingId=${pendingDelete} onAskDelete=${askDelete} onCancelDelete=${cancelDelete} onDelete=${confirmDelete}
             onOpen=${openGoal}
-            onMenu=${(id) => showSheet({ type: "menu", id })}
             onAdd=${() => showSheet({ type: "add" })} />`}
 
       ${sheet && sheet.type === "add" && html`
