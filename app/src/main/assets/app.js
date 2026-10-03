@@ -211,21 +211,43 @@ function savedK(g) {
   return toK(g.initial || 0) + items.reduce((s, t) => s + toK(t.amount), 0);
 }
 const savedOf = (g) => savedK(g) / 100;
+/* ---------- поэтапные цели: цель -> этапы -> пункты (чекбоксы) ----------
+   goal.stages = [{ id, title, items: [{ id, title, done }] }]
+   Прогресс считается ТОЛЬКО по пунктам: 5 отмеченных из 10 = 50%. Этап завершён, когда отмечены все его пункты. */
+const isStages = (g) => g.type === "stages";
+const itemsDone = (items) => items.filter((i) => i.done).length;
+function stageStats(g) {
+  const list = g.stages || [];
+  let done = 0, total = 0, stagesDone = 0;
+  list.forEach((s) => {
+    const d = itemsDone(s.items);
+    done += d; total += s.items.length;
+    if (s.items.length > 0 && d === s.items.length) stagesDone++;
+  });
+  return { done, total, stages: list.length, stagesDone };
+}
 const restOf = (g) => (g.target > 0 ? (toK(g.target) - savedK(g)) / 100 : Infinity);
 // целочисленный процент без ошибок вида 0.29 * 100 = 28.999…
-const pctOf = (g) => (g.target > 0 ? Math.min(100, Math.floor((savedK(g) * 100) / toK(g.target))) : 0);
-const reached = (g) => g.target > 0 && savedK(g) >= toK(g.target);
+const pctOf = (g) => {
+  if (isStages(g)) { const st = stageStats(g); return st.total ? Math.floor((st.done * 100) / st.total) : 0; }
+  return g.target > 0 ? Math.min(100, Math.floor((savedK(g) * 100) / toK(g.target))) : 0;
+};
+const reached = (g) => {
+  if (isStages(g)) { const st = stageStats(g); return st.total > 0 && st.done === st.total; }
+  return g.target > 0 && savedK(g) >= toK(g.target);
+};
 const isDone = (g) => reached(g) && !isWeekly(g); // еженедельная привычка не «завершается»: неделя сбрасывается
 const toDayStr = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
 
 const nfPlain = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 });
 const fmtNum = (n) => nfPlain.format(n);
-const TYPE_LABEL = { money: "Финансы", goal: "Достижения" };
-const typeIcon = (g) => (g.type === "money" ? "archive" : unitOf(g) ? "ruler" : "check");
+const TYPE_LABEL = { money: "Финансы", goal: "Достижения", stages: "Поэтапная" };
+const typeIcon = (g) => (isStages(g) ? "layers" : g.type === "money" ? "archive" : unitOf(g) ? "ruler" : "check");
 const unitOf = (g) => (g.unit || "").trim();
 const withUnit = (g, n) => fmtNum(n) + (unitOf(g) ? "\u00a0" + unitOf(g) : "");
 const pluralRu = (n, f) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? f[2] : b > 1 && b < 5 ? f[1] : b === 1 ? f[0] : f[2]; };
 function amountText(g) {
+  if (isStages(g)) { const st = stageStats(g); return "Этапов: " + st.stagesDone + " из " + st.stages; }
   const saved = savedOf(g);
   if (g.type === "goal") return fmtNum(saved) + " / " + withUnit(g, g.target) + (isWeekly(g) ? " за неделю" : "");
   return g.target > 0 ? fmt(saved) + " / " + fmt(g.target) : fmt(saved);
@@ -295,6 +317,17 @@ function saveGoals(goals) {
   return ok;
 }
 
+function cleanStages(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((s) => s && typeof s === "object").map((s) => ({
+    id: typeof s.id === "string" ? s.id : uid(),
+    title: typeof s.title === "string" ? s.title : "",
+    items: (Array.isArray(s.items) ? s.items : []).filter((i) => i && typeof i === "object").map((i) => ({
+      id: typeof i.id === "string" ? i.id : uid(), title: typeof i.title === "string" ? i.title : "", done: i.done === true,
+    })),
+  }));
+}
+
 function loadGoals() {
   try {
     const raw = localStorage.getItem(KEY);
@@ -307,7 +340,8 @@ function loadGoals() {
           .map((g) => ({
             ...g,
             // старые «привычки» и «измеримые цели» теперь просто «цели»
-            type: g.type === "habit" || g.type === "measure" || g.type === "goal" ? "goal" : "money",
+            type: g.type === "stages" ? "stages" : g.type === "habit" || g.type === "measure" || g.type === "goal" ? "goal" : "money",
+            stages: g.type === "stages" ? cleanStages(g.stages) : undefined,
             period: g.period === "week" && (g.type === "habit" || g.type === "goal") ? "week" : "total",
             unit: typeof g.unit === "string" ? g.unit : "",
             image: typeof g.image === "string" ? g.image : "",
@@ -349,8 +383,11 @@ const ICONS = {
   trash: '<path d="M4 7h16M9 7V4.5h6V7M6.5 7l.8 12.5h9.4L17.5 7M10 11v5M14 11v5"/>',
   image: '<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 2.5-2.5L20 18"/>',
   palette: '<path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.4 0 2-.9 2-1.8 0-1.2-.9-1.5-.9-2.5 0-.9.7-1.5 1.6-1.5H17a3.5 3.5 0 0 0 3.5-3.5C20.5 6.5 16.7 3.5 12 3.5z"/><circle cx="7.8" cy="11.2" r=".9" fill="currentColor"/><circle cx="10.5" cy="7.6" r=".9" fill="currentColor"/><circle cx="14.8" cy="7.9" r=".9" fill="currentColor"/>',
+  tick: '<path d="M5 12.8l4.4 4.4L19 7.5" stroke-width="2.6"/>',
   check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>',
   ruler: '<rect x="2.5" y="8" width="19" height="8" rx="1.8"/><path d="M6.5 8v3M10.5 8v4M14.5 8v3M18.5 8v4"/>',
+  layers: '<path d="M12 4l9 4.5-9 4.5-9-4.5z"/><path d="M3 12.5l9 4.5 9-4.5M3 16.5l9 4.5 9-4.5"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
   edit: '<path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/>',
 };
 function Icon({ name, size = 22, className }) {
@@ -361,9 +398,13 @@ function Icon({ name, size = 22, className }) {
 
 /* ---------- small components ---------- */
 function ProgressRow({ goal }) {
-  if (!(goal.target > 0)) return null;
+  const staged = isStages(goal);
+  if (!staged && !(goal.target > 0)) return null;
   const done = reached(goal);
-  const width = Math.min(100, Math.max(0, (savedK(goal) * 100) / toK(goal.target)));
+  const st = staged ? stageStats(goal) : null;
+  const width = staged
+    ? (st.total ? (st.done * 100) / st.total : 0)
+    : Math.min(100, Math.max(0, (savedK(goal) * 100) / toK(goal.target)));
   return html`
     <div className="prow">
       <div className="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(width)}>
@@ -375,6 +416,11 @@ function ProgressRow({ goal }) {
 }
 
 function RestLine({ goal }) {
+  if (isStages(goal)) {
+    const st = stageStats(goal), left = st.total - st.done;
+    if (st.total === 0 || left <= 0) return null;
+    return html`<div className="rest">Выполнено ${st.done} из ${st.total} · осталось ${left} ${pluralRu(left, ["пункт", "пункта", "пунктов"])}</div>`;
+  }
   if (!(goal.target > 0)) return null;
   const rest = restOf(goal);
   if (rest <= 0) return isWeekly(goal) ? html`<div className="rest ok">Норма недели выполнена</div>` : null;
@@ -422,9 +468,93 @@ function Sheet({ label, onClose, children }) {
 }
 
 /* ---------- sheets ---------- */
+/* ---------- конструктор этапов (внутри формы цели) ---------- */
+function StagesBuilder({ stages, setStages, onChange }) {
+  const focusId = useRef(null); // id поля, которое надо сфокусировать после добавления
+  useEffect(() => {
+    if (!focusId.current) return;
+    const el = document.getElementById(focusId.current);
+    focusId.current = null;
+    if (el) el.focus();
+  }, [stages]);
+
+  const touch = (fn) => { setStages((list) => fn(list)); onChange(); };
+  const addStage = () => touch((list) => {
+    const st = { id: uid(), title: "", items: [{ id: uid(), title: "", done: false }] };
+    focusId.current = "st-" + st.id;
+    return [...list, st];
+  });
+  const removeStage = (sid) => touch((list) => list.filter((s) => s.id !== sid));
+  const renameStage = (sid, title) => touch((list) => list.map((s) => (s.id === sid ? { ...s, title } : s)));
+  const addItem = (sid, afterId) => touch((list) => list.map((s) => {
+    if (s.id !== sid) return s;
+    const it = { id: uid(), title: "", done: false };
+    focusId.current = "it-" + it.id;
+    const at = afterId ? s.items.findIndex((i) => i.id === afterId) + 1 : s.items.length;
+    return { ...s, items: [...s.items.slice(0, at), it, ...s.items.slice(at)] };
+  }));
+  const removeItem = (sid, iid) => touch((list) => list.map((s) => (s.id === sid ? { ...s, items: s.items.filter((i) => i.id !== iid) } : s)));
+  const renameItem = (sid, iid, title) => touch((list) => list.map((s) => (s.id === sid
+    ? { ...s, items: s.items.map((i) => (i.id === iid ? { ...i, title } : i)) } : s)));
+
+  return html`
+    <div className="builder">
+      ${stages.map((s, n) => html`
+        <section key=${s.id} className="bstage" aria-label=${"Этап " + (n + 1)}>
+          <div className="bstage-head">
+            <span className="bnum">${n + 1}</span>
+            <div className="fin">
+              <input id=${"st-" + s.id} type="text" maxLength="80" placeholder="Название этапа" autoComplete="off"
+                     value=${s.title} onInput=${(e) => renameStage(s.id, e.target.value)}
+                     onKeyDown=${(e) => { if (e.key === "Enter") { e.preventDefault(); if (s.items[0]) { const el = document.getElementById("it-" + s.items[0].id); if (el) el.focus(); } else addItem(s.id); } }} />
+            </div>
+            <button type="button" className="icon-btn bdel" aria-label=${"Удалить этап " + (n + 1)} onClick=${() => removeStage(s.id)}>
+              <${Icon} name="trash" size=${20} />
+            </button>
+          </div>
+          <div className="bitems">
+            ${s.items.map((it) => html`
+              <div key=${it.id} className="bitem">
+                <span className=${"bbox" + (it.done ? " on" : "")} aria-hidden="true"></span>
+                <div className="fin">
+                  <input id=${"it-" + it.id} type="text" maxLength="80" placeholder="Подзадача" autoComplete="off"
+                         value=${it.title} onInput=${(e) => renameItem(s.id, it.id, e.target.value)}
+                         onKeyDown=${(e) => { if (e.key === "Enter") { e.preventDefault(); addItem(s.id, it.id); } }} />
+                </div>
+                <button type="button" className="icon-btn bdel" aria-label="Удалить пункт" onClick=${() => removeItem(s.id, it.id)}>
+                  <${Icon} name="close" size=${20} />
+                </button>
+              </div>
+            `)}
+            <button type="button" className="badd badd-item" onClick=${() => addItem(s.id)}><${Icon} name="plus" size=${18} /> Добавить пункт</button>
+          </div>
+        </section>
+      `)}
+      <button type="button" className="badd badd-stage" onClick=${addStage}><${Icon} name="plus" size=${20} /> Добавить этап</button>
+    </div>
+  `;
+}
+
+/* Черновик -> чистые данные: пустые пункты отбрасываются; этап без названия получает «Этап N» */
+function finalizeStages(draft) {
+  const out = [];
+  draft.forEach((s) => {
+    const items = s.items.map((i) => ({ ...i, title: i.title.trim() })).filter((i) => i.title);
+    const title = s.title.trim();
+    if (!title && items.length === 0) return; // совсем пустой этап — выбрасываем
+    out.push({ id: s.id, title: title || "Этап " + (out.length + 1), items });
+  });
+  return out;
+}
+
 function GoalScreen({ initial, onSubmit, onClose }) {
   const editing = !!initial;
-  const [type, setType] = useState(initial ? initial.type : "money");
+  const [type, setType] = useState(initial && initial.type !== "stages" ? initial.type : "money"); // тип простой цели
+  const [mode, setMode] = useState(initial && initial.type === "stages" ? "stages" : "simple"); // «Простая» / «Поэтапная»
+  const [stages, setStages] = useState(() => initial && initial.stages
+    ? initial.stages.map((s) => ({ ...s, items: s.items.map((i) => ({ ...i })) }))
+    : [{ id: uid(), title: "", items: [{ id: uid(), title: "", done: false }] }]);
+  const staged = mode === "stages";
   const [image, setImage] = useState(initial ? initial.image || "" : "");
   const [name, setName] = useState(initial ? initial.name : "");
   const [target, setTarget] = useState(initial && initial.target > 0 ? formatMoneyInput(String(initial.target).replace(".", ",")) : "");
@@ -459,7 +589,7 @@ function GoalScreen({ initial, onSubmit, onClose }) {
     }
   };
 
-  const meta = {
+  const meta = staged ? { ask: "Что хотим сделать?" } : {
     money: { ask: "На что копим?", label: "Какую сумму копим?", placeholder: "Без суммы", affix: "₽", integer: false },
     goal: { ask: "Что хотим достичь?", label: "Целевое значение", placeholder: "Например, 10", affix: unit.trim(), integer: false },
   }[type];
@@ -468,6 +598,16 @@ function GoalScreen({ initial, onSubmit, onClose }) {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return setError("Введите название цели.");
+    if (staged) {
+      const clean = finalizeStages(stages);
+      if (clean.length === 0) return setError("Добавьте хотя бы один этап с пунктом.");
+      const bare = clean.find((s) => s.items.length === 0);
+      if (bare) return setError("В этапе «" + bare.title + "» нет ни одного пункта.");
+      const base0 = new Date(editing ? initial.createdAt : Date.now());
+      const [y0, m0, d0] = dateStr.split("-").map(Number);
+      const createdAt0 = new Date(y0, m0 - 1, d0, base0.getHours(), base0.getMinutes(), base0.getSeconds()).getTime();
+      return onSubmit({ type: "stages", name: trimmed, target: 0, image, color, createdAt: createdAt0, initial: 0, period: "total", unit: "", stages: clean });
+    }
     let t = 0;
     if (type === "money") {
       if (target.trim()) {
@@ -508,7 +648,13 @@ function GoalScreen({ initial, onSubmit, onClose }) {
         <div className="fs-body">
           ${!editing && html`
             <div className="fgroup">
-              <${Seg} blue=${true} label="Тип цели" value=${type} onChange=${changeType}
+              <${Seg} blue=${true} label="Вид цели" value=${mode} onChange=${(m) => { setMode(m); setError(""); }}
+                      items=${[{ id: "simple", label: "Простая цель" }, { id: "stages", label: "Поэтапная цель" }]} />
+            </div>
+          `}
+          ${!editing && !staged && html`
+            <div className="fgroup">
+              <${Seg} blue=${true} label="Тип простой цели" value=${type} onChange=${changeType}
                       items=${[{ id: "money", label: TYPE_LABEL.money }, { id: "goal", label: TYPE_LABEL.goal }]} />
             </div>
           `}
@@ -528,16 +674,16 @@ function GoalScreen({ initial, onSubmit, onClose }) {
             </div>
           </div>
 
-          <div className="fgroup">
+          ${!staged && html`<div className="fgroup">
             <label className="fl" htmlFor="f-target">${meta.label}</label>
             <div className="fin">
               <${MoneyInput} key=${type} id="f-target" placeholder=${meta.placeholder} value=${target} integer=${meta.integer}
                              onValue=${(v) => { setTarget(v); setError(""); }} />
               ${meta.affix && html`<span className="affix">${meta.affix}</span>`}
             </div>
-          </div>
+          </div>`}
 
-          ${type === "money" && !editing && html`
+          ${!staged && type === "money" && !editing && html`
             <div className="fgroup">
               <label className="fl" htmlFor="f-start">Начальная сумма</label>
               <div className="fin">
@@ -548,7 +694,7 @@ function GoalScreen({ initial, onSubmit, onClose }) {
             </div>
           `}
 
-          ${type === "goal" && html`
+          ${!staged && type === "goal" && html`
             <div className="fgroup">
               <label className="fl" htmlFor="f-unit">Единица измерения (необязательно)</label>
               <div className="fin">
@@ -561,6 +707,13 @@ function GoalScreen({ initial, onSubmit, onClose }) {
                           onClick=${() => { setUnit(u); setError(""); }}>${u}</button>
                 `)}
               </div>
+            </div>
+          `}
+
+          ${staged && html`
+            <div className="fgroup">
+              <span className="fl">Этапы и подзадачи</span>
+              <${StagesBuilder} stages=${stages} setStages=${setStages} onChange=${() => setError("")} />
             </div>
           `}
 
@@ -836,7 +989,50 @@ function MeasureBar({ goal, onAdd }) {
   `;
 }
 
-function DetailScreen({ goal, onBack, onMenu, onAdd, onDeleteOp }) {
+/* ---------- просмотр поэтапной цели: этапы с чекбоксами ---------- */
+function StagesList({ goal, onToggle }) {
+  const [collapsed, setCollapsed] = useState({}); // id этапа -> true, если свёрнут
+  const list = goal.stages || [];
+  if (list.length === 0) return html`<div className="empty"><b>Этапов пока нет</b>Откройте меню «•••» → «Изменить цель», чтобы добавить этапы.</div>`;
+  return html`
+    <div className="stages">
+      ${list.map((s, n) => {
+        const d = itemsDone(s.items), total = s.items.length, full = total > 0 && d === total;
+        const open = !collapsed[s.id];
+        return html`
+          <section key=${s.id} className=${"stage" + (full ? " full" : "")}>
+            <button type="button" className="stage-head" aria-expanded=${open}
+                    onClick=${() => setCollapsed((c) => ({ ...c, [s.id]: open }))}>
+              <span className="stage-main">
+                <span className="stage-name">${n + 1}. ${s.title}</span>
+                <span className="stage-count">${d}/${total} выполнено</span>
+              </span>
+              <${Icon} name="chevR" size=${22} className=${"stage-chev" + (open ? " open" : "")} />
+            </button>
+            <div className="mini" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${total ? Math.round((d * 100) / total) : 0}>
+              <div className="fill" style=${{ width: (total ? (d * 100) / total : 0) + "%", background: full ? DONE_COLOR : goal.color || undefined }}></div>
+            </div>
+            ${open && html`
+              <div className="subtasks">
+                ${s.items.map((it) => html`
+                  <button key=${it.id} type="button" role="checkbox" aria-checked=${it.done}
+                          className=${"subtask" + (it.done ? " done" : "")} onClick=${() => onToggle(s.id, it.id)}>
+                    <span className="cbox" style=${it.done ? { background: goal.color || DEFAULT_COLOR, borderColor: goal.color || DEFAULT_COLOR } : null}>
+                      ${it.done && html`<${Icon} name="tick" size=${16} />`}
+                    </span>
+                    <span className="subtask-title">${it.title}</span>
+                  </button>
+                `)}
+              </div>
+            `}
+          </section>
+        `;
+      })}
+    </div>
+  `;
+}
+
+function DetailScreen({ goal, onBack, onMenu, onAdd, onDeleteOp, onToggle }) {
   const checkIn = goal.type === "goal" && !unitOf(goal); // цель без единицы: быстрая отметка «+1»
   const saved = savedOf(goal);
   const sorted = [...goal.history].sort((a, b) => b.at - a.at);
@@ -864,7 +1060,9 @@ function DetailScreen({ goal, onBack, onMenu, onAdd, onDeleteOp }) {
         <${RestLine} goal=${goal} />
       </div>
 
-      ${groups.length === 0
+      ${isStages(goal) ? html`<${StagesList} goal=${goal} onToggle=${onToggle} />` : null}
+
+      ${isStages(goal) ? null : groups.length === 0
         ? html`<div className="empty"><b>${checkIn ? "Отметок пока нет" : "Записей пока нет"}</b>${checkIn ? "Нажмите «+1», чтобы отметить первое выполнение." : goal.type === "goal" ? "Введите значение внизу и нажмите «Добавить»." : "Нажмите «Пополнить», чтобы добавить первую сумму."}</div>`
         : html`<div className="history">
             ${groups.map((gr) => html`
@@ -885,7 +1083,7 @@ function DetailScreen({ goal, onBack, onMenu, onAdd, onDeleteOp }) {
             `)}
           </div>`}
 
-      ${goal.type === "money"
+      ${isStages(goal) ? null : goal.type === "money"
         ? html`<${TopUpBar} saved=${savedOf(goal)} target=${goal.target} onAdd=${onAdd} />`
         : checkIn
           ? html`<${HabitBar} goal=${goal} onAdd=${onAdd} />`
@@ -1035,6 +1233,7 @@ function App() {
       id: uid(), type: v.type, period: v.period, unit: v.unit, name: v.name, target: v.target, image: v.image, color: v.color, deadline: "", createdAt: v.createdAt,
       initial: v.initial, // стартовый баланс: хранится отдельно, в историю операций не попадает
       history: [],
+      ...(v.type === "stages" ? { stages: v.stages } : {}),
     }, ...gs]);
     const finished = v.type === "money" && v.target > 0 && v.initial >= v.target;
     setTab(finished ? "done" : "active");
@@ -1042,7 +1241,8 @@ function App() {
     if (finished) launchConfetti(); // цель закрыта начальной суммой — салют сразу при создании
   };
   const editGoal = (id, v) => {
-    patchGoal(id, (g) => ({ ...g, name: v.name, target: v.target, period: v.period, unit: v.unit, image: v.image, color: v.color, createdAt: v.createdAt }));
+    patchGoal(id, (g) => ({ ...g, name: v.name, target: v.target, period: v.period, unit: v.unit, image: v.image, color: v.color, createdAt: v.createdAt,
+      ...(g.type === "stages" && v.stages ? { stages: v.stages } : {}) }));
     close();
   };
   const addOp = (id, amount, at) => {
@@ -1057,6 +1257,19 @@ function App() {
       }
       return { ...g, history: [...g.history, { id: uid(), amount: a, at }] };
     });
+  };
+  // Клик по чекбоксу: меняем один пункт; прогресс этапа и цели пересчитывается из данных, запись в localStorage — сразу
+  const toggleItem = (id, stageId, itemId) => {
+    patchGoal(id, (g) => ({
+      ...g,
+      stages: (g.stages || []).map((s) => (s.id !== stageId ? s : {
+        ...s, items: s.items.map((i) => {
+          if (i.id !== itemId) return i;
+          if (!i.done) celebrate.current = id; // конфетти сработает, только если цель дошла до 100%
+          return { ...i, done: !i.done };
+        }),
+      })),
+    }));
   };
   const deleteOp = (id, opId) => {
     patchGoal(id, (g) => ({ ...g, history: g.history.filter((t) => t.id !== opId) }));
@@ -1077,6 +1290,7 @@ function App() {
             onBack=${goHome}
             onMenu=${() => showSheet({ type: "menu", id: goal.id })}
             onAdd=${(amount) => { if (amount > 0) celebrate.current = goal.id; addOp(goal.id, amount, Date.now()); }}
+            onToggle=${(stageId, itemId) => toggleItem(goal.id, stageId, itemId)}
             onDeleteOp=${(opId) => deleteOp(goal.id, opId)} />`
         : html`<${ListScreen} goals=${goals} tab=${tab} setTab=${(t) => { cancelDelete(); setTab(t); }}
             pendingId=${pendingDelete} onAskDelete=${askDelete} onCancelDelete=${cancelDelete} onDelete=${confirmDelete}

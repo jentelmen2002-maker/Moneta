@@ -313,6 +313,41 @@
   .menu-row:hover { background: var(--bg); }
   .menu-row.danger { color: var(--red); }
 
+
+  /* ---------- поэтапные цели ---------- */
+  .stages { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 120px; }
+  .stage { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 6px 16px 10px; }
+  .stage-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 52px; padding: 0; background: none; border: none; text-align: left; color: var(--ink); }
+  .stage-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .stage-name { font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
+  .stage-count { font-size: 13px; color: var(--muted); }
+  .stage.full .stage-count { color: var(--green); }
+  .stage-chev { flex: none; color: var(--muted); transition: transform .2s ease; }
+  .stage-chev.open { transform: rotate(90deg); }
+  .mini { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; margin: 2px 0 6px; }
+  .mini .fill { border-radius: 3px; }
+  .subtasks { display: flex; flex-direction: column; }
+  .subtask { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 48px; padding: 6px 0; background: none; border: none; text-align: left; font-size: 17px; color: var(--ink); -webkit-tap-highlight-color: transparent; }
+  .subtask + .subtask { border-top: 1px solid var(--line); }
+  .cbox { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border: 2px solid var(--input-line); border-radius: 8px; background: var(--card); color: #fff; transition: background .15s ease, border-color .15s ease; }
+  .subtask-title { min-width: 0; overflow-wrap: anywhere; }
+  .subtask.done .subtask-title { color: var(--muted); text-decoration: line-through; }
+
+  /* конструктор в форме цели */
+  .builder { display: flex; flex-direction: column; gap: 12px; }
+  .bstage { background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 10px 8px 6px 10px; }
+  .bstage-head, .bitem { display: flex; align-items: center; gap: 8px; }
+  .bnum { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: var(--blue); color: var(--on-blue); font-size: 14px; font-weight: 700; }
+  .bstage .fin { height: 44px; }
+  .bstage .fin input:not([type="date"]) { height: 42px; font-size: 16px; }
+  .bstage-head .fin input { font-weight: 700; }
+  .bitems { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 0 34px; }
+  .bbox { flex: none; width: 18px; height: 18px; border: 2px solid var(--input-line); border-radius: 6px; }
+  .bdel { flex: none; color: var(--muted); }
+  .badd { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; background: none; border: none; color: var(--blue); font-size: 16px; font-weight: 500; }
+  .badd-item { align-self: flex-start; padding: 0 4px; }
+  .badd-stage { border: 1.5px dashed var(--blue); border-radius: 14px; }
+
   @media (prefers-reduced-motion: no-preference) {
     .overlay { animation: fade .18s ease-out; }
     .sheet { animation: rise .24s cubic-bezier(.2, .8, .2, 1); }
