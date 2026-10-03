@@ -220,7 +220,7 @@ const toDayStr = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pa
 
 const nfPlain = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 });
 const fmtNum = (n) => nfPlain.format(n);
-const TYPE_LABEL = { money: "Финансы", goal: "Цели" };
+const TYPE_LABEL = { money: "Финансы", goal: "Достижения" };
 const typeIcon = (g) => (g.type === "money" ? "archive" : unitOf(g) ? "ruler" : "check");
 const unitOf = (g) => (g.unit || "").trim();
 const withUnit = (g, n) => fmtNum(n) + (unitOf(g) ? "\u00a0" + unitOf(g) : "");
@@ -509,7 +509,7 @@ function GoalScreen({ initial, onSubmit, onClose }) {
           ${!editing && html`
             <div className="fgroup">
               <${Seg} blue=${true} label="Тип цели" value=${type} onChange=${changeType}
-                      items=${[{ id: "money", label: "Финансы" }, { id: "goal", label: "Цели" }]} />
+                      items=${[{ id: "money", label: TYPE_LABEL.money }, { id: "goal", label: TYPE_LABEL.goal }]} />
             </div>
           `}
 
@@ -618,6 +618,7 @@ function ConfirmSheet({ title, text, confirmLabel, onConfirm, onClose }) {
 function MenuSheet({ goal, onEdit, onDelete, onClose }) {
   return html`
     <${Sheet} label="Действия с целью" onClose=${onClose}>
+      <h2 className="sheet-title">${goal.name}</h2>
       <button type="button" className="menu-row" onClick=${onEdit}><${Icon} name="edit" /> Изменить цель</button>
       <button type="button" className="menu-row danger" onClick=${onDelete}><${Icon} name="trash" /> Удалить цель</button>
     <//>
@@ -625,7 +626,7 @@ function MenuSheet({ goal, onEdit, onDelete, onClose }) {
 }
 
 /* ---------- screens ---------- */
-function GoalCard({ goal, onOpen }) {
+function GoalCard({ goal, onOpen, onMenu }) {
   const saved = savedOf(goal);
   return html`
     <div className="goal-card" role="button" tabIndex="0" onClick=${onOpen}
@@ -640,11 +641,16 @@ function GoalCard({ goal, onOpen }) {
       </div>
       <${RestLine} goal=${goal} />
       <${Icon} name="chevR" size=${24} className="chev" />
+      <button type="button" className="card-menu" aria-label=${"Меню цели «" + goal.name + "»"}
+              onClick=${(e) => { e.stopPropagation(); onMenu(); }}
+              onKeyDown=${(e) => e.stopPropagation()}>
+        <${Icon} name="dots" size=${22} />
+      </button>
     </div>
   `;
 }
 
-function ListScreen({ goals, tab, setTab, onOpen, onAdd }) {
+function ListScreen({ goals, tab, setTab, onOpen, onMenu, onAdd }) {
   const active = goals.filter((g) => !isDone(g));
   const done = goals.filter(isDone);
   const shown = tab === "active" ? active : done;
@@ -662,7 +668,7 @@ function ListScreen({ goals, tab, setTab, onOpen, onAdd }) {
             ${tab === "active" ? "Нажмите «+», чтобы создать цель." : "Здесь будут храниться цели, которые вы успешно завершили."}
           </div>`
         : html`<div className="cards">
-            ${shown.map((g) => html`<${GoalCard} key=${g.id} goal=${g} onOpen=${() => onOpen(g.id)} />`)}
+            ${shown.map((g) => html`<${GoalCard} key=${g.id} goal=${g} onOpen=${() => onOpen(g.id)} onMenu=${() => onMenu(g.id)} />`)}
           </div>`}
       <button type="button" className="fab" aria-label="Новая цель" onClick=${onAdd}><${Icon} name="plus" size=${28} /></button>
     </div>
@@ -1006,6 +1012,7 @@ function App() {
             onDeleteOp=${(opId) => deleteOp(goal.id, opId)} />`
         : html`<${ListScreen} goals=${goals} tab=${tab} setTab=${setTab}
             onOpen=${openGoal}
+            onMenu=${(id) => showSheet({ type: "menu", id })}
             onAdd=${() => showSheet({ type: "add" })} />`}
 
       ${sheet && sheet.type === "add" && html`
