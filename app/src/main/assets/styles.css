@@ -174,7 +174,7 @@
   .prow { display: flex; align-items: center; gap: 8px; width: calc(100% + 14px); margin-top: 6px; }
   .track { flex: 1; height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
   .fill { height: 100%; background: var(--blue); border-radius: 4px; transition: width .4s ease; }
-  .pct { font-size: 13px; color: var(--muted); min-width: 34px; }
+  .pct { font-size: 13px; color: var(--muted); min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
 
   .empty { text-align: center; color: var(--muted); padding: 56px 24px; }
   .empty b { display: block; color: var(--ink); font-size: 18px; margin-bottom: 6px; }
@@ -277,7 +277,7 @@
   .fin .affix { color: var(--muted); font-size: 18px; }
   .fdate { position: relative; justify-content: space-between; font-size: 17px; cursor: pointer; }
   .fdate svg { color: var(--ink); }
-  .fdate input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  .fdate input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; } /* клики принимает контейнер .fdate */
   .colorbtn { width: 46px; height: 46px; display: grid; place-items: center; padding: 0; border: 1px solid; border-radius: 12px; }
   .swatches { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; padding: 12px; background: var(--card); border: 1px solid var(--field-line); border-radius: 14px; }
   .swatch { width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 3px solid var(--card); outline: 2px solid transparent; }
@@ -314,39 +314,31 @@
   .menu-row.danger { color: var(--red); }
 
 
-  /* ---------- поэтапные цели ---------- */
-  .stages { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 120px; }
-  .stage { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 6px 16px 10px; }
-  .stage-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 52px; padding: 0; background: none; border: none; text-align: left; color: var(--ink); }
-  .stage-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .stage-name { font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
-  .stage-count { font-size: 13px; color: var(--muted); }
-  .stage.full .stage-count { color: var(--green); }
-  .stage-chev { flex: none; color: var(--muted); transition: transform .2s ease; }
-  .stage-chev.open { transform: rotate(90deg); }
-  .mini { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; margin: 2px 0 6px; }
-  .mini .fill { border-radius: 3px; }
-  .subtasks { display: flex; flex-direction: column; }
-  .subtask { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 48px; padding: 6px 0; background: none; border: none; text-align: left; font-size: 17px; color: var(--ink); -webkit-tap-highlight-color: transparent; }
-  .subtask + .subtask { border-top: 1px solid var(--line); }
-  .cbox { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border: 2px solid var(--input-line); border-radius: 8px; background: var(--card); color: #fff; transition: background .15s ease, border-color .15s ease; }
-  .subtask-title { min-width: 0; overflow-wrap: anywhere; }
-  .subtask.done .subtask-title { color: var(--muted); text-decoration: line-through; }
+  /* ---------- поэтапные финансовые цели ---------- */
+  .stages { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 0; }
+  .stage { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 14px 16px 12px; }
+  .stage-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .stage-name { font-size: 17px; font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
+  .stage-state { flex: none; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--seg); color: var(--muted); }
+  .stage-state.run { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, #fff); }
+  .stage-state.ok { color: #15803D; background: color-mix(in srgb, var(--green) 16%, #fff); }
+  .stage-sum { margin-top: 6px; font-size: 16px; color: var(--ink); }
+  .mini-row { width: 100%; margin-top: 8px; }
 
   /* конструктор в форме цели */
   .builder { display: flex; flex-direction: column; gap: 12px; }
-  .bstage { background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 10px 8px 6px 10px; }
-  .bstage-head, .bitem { display: flex; align-items: center; gap: 8px; }
+  .bstage { background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 10px 8px 12px 10px; }
+  .bstage-head { display: flex; align-items: center; gap: 8px; }
   .bnum { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: var(--blue); color: var(--on-blue); font-size: 14px; font-weight: 700; }
   .bstage .fin { height: 44px; }
   .bstage .fin input:not([type="date"]) { height: 42px; font-size: 16px; }
   .bstage-head .fin input { font-weight: 700; }
-  .bitems { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 0 34px; }
-  .bbox { flex: none; width: 18px; height: 18px; border: 2px solid var(--input-line); border-radius: 6px; }
+  .bsum { margin: 8px 36px 0 34px; }
   .bdel { flex: none; color: var(--muted); }
   .badd { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; background: none; border: none; color: var(--blue); font-size: 16px; font-weight: 500; }
-  .badd-item { align-self: flex-start; padding: 0 4px; }
   .badd-stage { border: 1.5px dashed var(--blue); border-radius: 14px; }
+  .btotal { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 4px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 15px; }
+  .btotal b { color: var(--ink); font-size: 20px; font-weight: 700; }
 
   @media (prefers-reduced-motion: no-preference) {
     .overlay { animation: fade .18s ease-out; }
