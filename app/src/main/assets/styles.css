@@ -225,7 +225,7 @@
     font-size: 19px; font-weight: 500; letter-spacing: .2px;
   }
   .btn-blue { background: var(--blue-btn); color: var(--on-blue); }
-  .btn-dark { background: var(--dark); color: var(--on-dark); }
+  .btn-dark { background: var(--blue-btn); color: var(--on-blue); }
   .btn-red { background: var(--red); color: #fff; }
   .btn-plain { background: var(--bg); border-color: var(--line); color: var(--ink); }
   .btn:active { filter: brightness(.94); }
@@ -347,3 +347,47 @@
     @keyframes rise { from { transform: translateY(40px); opacity: .6; } }
   }
   @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
+
+/* поле «Другая сумма» рядом с двумя кнопками: плейсхолдер не должен обрезаться */
+.topup-row .field { padding: 0 12px; gap: 6px; }
+.topup-row .field input { font-size: 16px; }
+.topup-row .field .affix { font-size: 17px; }
+
+/* ---------- свайпы ---------- */
+.swipe-area { min-height: 100vh; touch-action: pan-y; } /* вертикальную прокрутку ведёт браузер, горизонтальные жесты ловим сами */
+.seg.swipeable { touch-action: pan-y; }
+.pane { will-change: transform; }
+@media (prefers-reduced-motion: no-preference) {
+  .pane.from-right { animation: pane-in-r .3s cubic-bezier(.2, .8, .2, 1) both; }
+  .pane.from-left { animation: pane-in-l .3s cubic-bezier(.2, .8, .2, 1) both; }
+  @keyframes pane-in-r { from { opacity: 0; transform: translate3d(42px, 0, 0); } }
+  @keyframes pane-in-l { from { opacity: 0; transform: translate3d(-42px, 0, 0); } }
+}
+
+/* ---------- переключатель: плавающая плашка ---------- */
+.seg { position: relative; }
+.seg-ind {
+  position: absolute; top: 0; bottom: 0; left: 0; z-index: 0; pointer-events: none;
+  background: var(--seg-active); border: 1px solid var(--line); border-radius: 22px;
+  transition: transform .32s cubic-bezier(.2, .8, .2, 1);
+}
+.seg.blue .seg-ind { background: var(--blue-btn); border-color: var(--blue-btn); }
+.seg button, .seg button[aria-selected="true"], .seg.blue button[aria-selected="true"] {
+  position: relative; z-index: 1; background: transparent; border-color: transparent; color: var(--muted);
+  transition: color .2s ease;
+}
+.seg button.near { color: var(--ink); }
+.seg.blue button.near { color: var(--on-blue); }
+@media (prefers-reduced-motion: reduce) { .seg-ind { transition: none; } }
+
+/* ---------- единый стиль активных кнопок: плоский голубой (как «Добавить»), белый текст ---------- */
+.btn-blue, .btn-dark, .presets .btn, .presets .btn.btn-blue, .topup-row .btn:not(.btn-plain), .fab {
+  background: var(--blue-btn); color: var(--on-blue);
+  background-image: none; box-shadow: none; text-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.presets .btn { font-weight: 500; border: 1px solid transparent; }
+.btn:active { filter: brightness(.94); }
+.presets .btn:focus-visible, .btn:focus-visible { outline: 3px solid #BFDBFE; outline-offset: 2px; }
+
+.hint-text { margin: 6px 4px 0; color: var(--muted); font-size: 13px; }

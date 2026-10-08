@@ -439,11 +439,126 @@ function isLate(goal) {
   return parseDay(goal.deadline) < today;
 }
 
-function Seg({ items, value, onChange, blue, label, cls }) {
+/* ---------- свайпы вбок ----------
+   useSwipe даёт обработчики для контейнера и стиль для «панели», которая едет за пальцем.
+   Работает и с касанием, и с мышью (Pointer Events). Вертикальная прокрутка не трогается:
+   жест «захватывается», только если движение по горизонтали заметно больше, чем по вертикали. */
+const SWIPE_LOCK = 8;      // px: после этого решаем, горизонтальный это жест или нет
+const SWIPE_MIN = 64;      // px: дальше этого свайп засчитывается
+const SWIPE_FLICK = 0.45;  // px/мс: быстрый «щелчок» засчитывается и на меньшем пути
+const SWIPE_OUT_MS = 170;  // длительность «ухода» панели перед сменой экрана
+
+function useSwipe({ onSwipe, canSwipe, animateOut = true, ignore }) {
+  // dir: -1 = свайп влево, +1 = свайп вправо
+  const [dx, setDx] = useState(0);
+  const [phase, setPhase] = useState("idle"); // idle | drag | out
+  const st = useRef(null);
+  const swipedAt = useRef(-1e9);
+  const timer = useRef(null);
+  const cb = useRef({});
+  cb.current = { onSwipe, canSwipe, animateOut };
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  // Обработчики window должны быть одними и теми же функциями на всё время жеста,
+  // поэтому они читают актуальную логику через ref'ы.
+  const logic = useRef({});
+  const stableMove = useRef((e) => logic.current.move(e)).current;
+  const stableUp = useRef((e) => logic.current.end(e, false)).current;
+  const stableCancel = useRef((e) => logic.current.end(e, true)).current;
+  const detach = () => {
+    window.removeEventListener("pointermove", stableMove);
+    window.removeEventListener("pointerup", stableUp);
+    window.removeEventListener("pointercancel", stableCancel);
+    st.current = null;
+  };
+
+  logic.current.move = (e) => {
+    const s = st.current;
+    if (!s || (s.id !== undefined && e.pointerId !== s.id)) return;
+    const mx = e.clientX - s.x, my = e.clientY - s.y;
+    if (!s.locked) {
+      if (Math.abs(my) > SWIPE_LOCK && Math.abs(my) > Math.abs(mx)) { detach(); return; } // это прокрутка
+      if (Math.abs(mx) < SWIPE_LOCK || Math.abs(mx) < Math.abs(my) * 1.2) return;
+      s.locked = true;
+      setPhase("drag");
+    }
+    const dt = e.timeStamp - s.lastT;
+    if (dt > 0) s.v = (e.clientX - s.lastX) / dt;
+    s.lastX = e.clientX; s.lastT = e.timeStamp; s.dx = mx;
+    setDx(cb.current.canSwipe(mx < 0 ? -1 : 1) ? mx : mx * 0.25); // за краем: «резинка»
+  };
+  logic.current.end = (e, cancelled) => {
+    const s = st.current;
+    detach();
+    if (!s || !s.locked) return;
+    swipedAt.current = performance.now();
+    const dir = s.dx < 0 ? -1 : 1;
+    const far = Math.abs(s.dx) >= SWIPE_MIN;
+    const flick = Math.abs(s.dx) > 24 && Math.abs(s.v) > SWIPE_FLICK && Math.sign(s.v) === dir;
+    if (cancelled || !cb.current.canSwipe(dir) || !(far || flick)) { setPhase("idle"); setDx(0); return; } // пружина назад
+    if (!cb.current.animateOut) { setPhase("idle"); setDx(0); cb.current.onSwipe(dir); return; }
+    setPhase("out"); setDx(dir * 70);
+    timer.current = setTimeout(() => { cb.current.onSwipe(dir); setPhase("idle"); setDx(0); }, SWIPE_OUT_MS);
+  };
+
+  const onPointerDown = (e) => {
+    if (phase === "out") return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (ignore && ignore(e.target)) return;
+    detach();
+    st.current = { id: e.pointerId, x: e.clientX, y: e.clientY, lastX: e.clientX, lastT: e.timeStamp, v: 0, dx: 0, locked: false };
+    window.addEventListener("pointermove", stableMove);
+    window.addEventListener("pointerup", stableUp);
+    window.addEventListener("pointercancel", stableCancel);
+  };
+  // после жеста браузер всё равно шлёт click: глотаем его, чтобы карточка под пальцем не открылась
+  const onClickCapture = (e) => {
+    if (performance.now() - swipedAt.current < 350) { e.stopPropagation(); e.preventDefault(); }
+  };
+  useEffect(() => detach, []);
+
+  const fade = phase === "out" ? 0 : 1; // прозрачность трогаем только при «уходе»: иначе стекло карточек теряет размытие фона
+  const style = {
+    transform: "translate3d(" + dx + "px,0,0)",
+    opacity: fade,
+    transition: phase === "drag" ? "none" : phase === "out"
+      ? "transform " + SWIPE_OUT_MS + "ms ease-in, opacity " + SWIPE_OUT_MS + "ms ease-in"
+      : "transform .32s cubic-bezier(.2,.8,.2,1), opacity .32s ease",
+  };
+  return { bind: { onPointerDown, onClickCapture }, style, dragging: phase === "drag", phase, dx };
+}
+const ignoreFields = (el) => !!(el && el.closest && el.closest("input, textarea, select, .actionbar"));
+
+// Переключатель с плавающей плашкой (sliding indicator).
+//  swipe    — свайп по самому переключателю (форма): плашка едет за пальцем, пропорционально сдвигу;
+//  progress — положение плашки задаёт родитель (список: плашка следует за свайпом всей области), 0 = первый пункт, 1 = второй…
+function Seg({ items, value, onChange, blue, label, cls, swipe, progress, dragging }) {
+  const n = items.length;
+  const idx = Math.max(0, items.findIndex((it) => it.id === value));
+  const ref = useRef(null);
+  const sw = useSwipe({
+    animateOut: false,
+    canSwipe: (dir) => !!swipe && !!items[idx - dir],
+    onSwipe: (dir) => { const it = items[idx - dir]; if (it) onChange(it.id); }, // влево = следующий пункт
+  });
+  const slot = ref.current ? ref.current.offsetWidth / n : 180; // ширина одного пункта, px
+  let pos = idx;
+  if (progress !== undefined) pos = progress;
+  else if (swipe) pos = idx - sw.dx / slot;
+  pos = Math.max(0, Math.min(n - 1, pos));
+  const drag = progress !== undefined ? !!dragging : sw.dragging;
+  const near = Math.round(pos); // пункт под плашкой: у него «активный» цвет текста
+  const onKeyDown = (e) => { // стрелки на клавиатуре, как у обычных вкладок
+    const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (d && items[idx + d]) { e.preventDefault(); onChange(items[idx + d].id); }
+  };
   return html`
-    <div className=${"seg" + (blue ? " blue" : "") + (cls ? " " + cls : "")} role="tablist" aria-label=${label}>
-      ${items.map((it) => html`
-        <button key=${it.id} type="button" role="tab" aria-selected=${value === it.id}
+    <div ref=${ref} className=${"seg" + (blue ? " blue" : "") + (cls ? " " + cls : "") + (swipe ? " swipeable" : "")} role="tablist" aria-label=${label}
+         onKeyDown=${onKeyDown} ...${swipe ? sw.bind : {}}>
+      <span className="seg-ind" aria-hidden="true"
+            style=${{ width: 100 / n + "%", transform: "translate3d(" + pos * 100 + "%,0,0)", transition: drag ? "none" : undefined }}></span>
+      ${items.map((it, i) => html`
+        <button key=${it.id} type="button" role="tab" aria-selected=${value === it.id} className=${i === near ? "near" : ""}
                 onClick=${() => onChange(it.id)}>${it.label}</button>
       `)}
     </div>
@@ -544,7 +659,7 @@ function GoalScreen({ initial, onSubmit, onClose }) {
   const [image, setImage] = useState(initial ? initial.image || "" : "");
   const [name, setName] = useState(initial ? initial.name : "");
   const [target, setTarget] = useState(initial && initial.target > 0 ? formatMoneyInput(String(initial.target).replace(".", ",")) : "");
-  const [startAmount, setStartAmount] = useState("");
+  const [startAmount, setStartAmount] = useState(initial && initial.initial > 0 ? formatMoneyInput(String(initial.initial).replace(".", ",")) : "");
   const period = initial ? initial.period : "total"; // периодичность убрана; у старых еженедельных привычек сохраняется
   const [unit, setUnit] = useState(initial ? initial.unit || "" : "");
   const [dateStr, setDateStr] = useState(toDayStr(new Date(initial ? initial.createdAt : Date.now())));
@@ -605,7 +720,12 @@ function GoalScreen({ initial, onSubmit, onClose }) {
       const base0 = new Date(editing ? initial.createdAt : Date.now());
       const [y0, m0, d0] = dateStr.split("-").map(Number);
       const createdAt0 = new Date(y0, m0 - 1, d0, base0.getHours(), base0.getMinutes(), base0.getSeconds()).getTime();
-      return onSubmit({ type: "stages", name: trimmed, target: sum, image, color, createdAt: createdAt0, initial: 0, period: "total", unit: "", stages: clean });
+      let init0 = 0;
+      if (startAmount.trim()) {
+        init0 = parseMoney(startAmount);
+        if (!(init0 >= 0)) return setError("Начальная сумма указана неверно.");
+      }
+      return onSubmit({ type: "stages", name: trimmed, target: sum, image, color, createdAt: createdAt0, initial: init0, period: "total", unit: "", stages: clean });
     }
     let t = 0;
     if (type === "money") {
@@ -618,7 +738,7 @@ function GoalScreen({ initial, onSubmit, onClose }) {
       if (!(t > 0)) return setError("Укажите целевое значение больше нуля.");
     }
     let init = 0;
-    if (!editing && type === "money" && startAmount.trim()) {
+    if (type === "money" && startAmount.trim()) {
       init = parseMoney(startAmount);
       if (!(init >= 0)) return setError("Начальная сумма указана неверно.");
     }
@@ -640,13 +760,13 @@ function GoalScreen({ initial, onSubmit, onClose }) {
         <div className="fs-body">
           ${!editing && html`
             <div className="fgroup">
-              <${Seg} blue=${true} label="Вид цели" value=${mode} onChange=${(m) => { setMode(m); setError(""); }}
+              <${Seg} blue=${true} swipe=${true} label="Вид цели" value=${mode} onChange=${(m) => { setMode(m); setError(""); }}
                       items=${[{ id: "simple", label: "Простая цель" }, { id: "stages", label: "Поэтапная цель" }]} />
             </div>
           `}
           ${!editing && !staged && html`
             <div className="fgroup">
-              <${Seg} blue=${true} label="Тип простой цели" value=${type} onChange=${changeType}
+              <${Seg} blue=${true} swipe=${true} label="Тип простой цели" value=${type} onChange=${changeType}
                       items=${[{ id: "money", label: TYPE_LABEL.money }, { id: "goal", label: TYPE_LABEL.goal }]} />
             </div>
           `}
@@ -675,7 +795,7 @@ function GoalScreen({ initial, onSubmit, onClose }) {
             </div>
           </div>`}
 
-          ${!staged && type === "money" && !editing && html`
+          ${!staged && type === "money" && html`
             <div className="fgroup">
               <label className="fl" htmlFor="f-start">Начальная сумма</label>
               <div className="fin">
@@ -706,6 +826,18 @@ function GoalScreen({ initial, onSubmit, onClose }) {
             <div className="fgroup">
               <span className="fl">Этапы и подзадачи</span>
               <${StagesBuilder} stages=${stages} setStages=${setStages} onChange=${() => setError("")} />
+            </div>
+          `}
+
+          ${staged && html`
+            <div className="fgroup">
+              <label className="fl" htmlFor="f-start">Начальная сумма</label>
+              <div className="fin">
+                <${MoneyInput} id="f-start" placeholder="0" value=${startAmount}
+                               onValue=${(v) => { setStartAmount(v); setError(""); }} />
+                <span className="affix">₽</span>
+              </div>
+              <p className="hint-text">Уже накопленное: распределится по этапам по порядку</p>
             </div>
           `}
 
@@ -849,14 +981,31 @@ function ListScreen({ goals, tab, setTab, pendingId, onOpen, onAskDelete, onCanc
   const active = goals.filter((g) => !isDone(g));
   const done = goals.filter(isDone);
   const shown = tab === "active" ? active : done;
+
+  // Направление «въезда» новой вкладки: «Выполненные» приезжают справа, «Активные» слева
+  const order = ["active", "done"];
+  const prevTab = useRef(tab);
+  const enter = useRef("");
+  if (prevTab.current !== tab) { enter.current = order.indexOf(tab) > order.indexOf(prevTab.current) ? "from-right" : "from-left"; prevTab.current = tab; }
+  const areaRef = useRef(null);
+  const sw = useSwipe({
+    canSwipe: (dir) => !!order[order.indexOf(tab) - dir], // влево = следующая вкладка, вправо = предыдущая
+    onSwipe: (dir) => { const t = order[order.indexOf(tab) - dir]; if (t) setTab(t); },
+  });
+  // положение плашки: следует за пальцем (пол-экрана свайпа = переезд на целый пункт), а при «уходе» панели сразу едет к цели
+  const tabIdx = order.indexOf(tab);
+  const areaW = areaRef.current ? areaRef.current.offsetWidth : 360;
+  let progress = tabIdx - sw.dx / Math.max(160, areaW / 2);
+  if (sw.phase === "out") progress = tabIdx - Math.sign(sw.dx);
   return html`
-    <div>
+    <div className="swipe-area" ref=${areaRef} ...${sw.bind}>
       <div className="tabs-row">
         <div className="tabs">
-          <${Seg} label="Фильтр целей" value=${tab} onChange=${setTab}
+          <${Seg} label="Фильтр целей" value=${tab} onChange=${setTab} progress=${progress} dragging=${sw.dragging}
                   items=${[{ id: "active", label: "Активные (" + active.length + ")" }, { id: "done", label: "Выполненные (" + done.length + ")" }]} />
         </div>
       </div>
+      <div key=${tab} className=${"pane " + enter.current} style=${sw.style}>
       ${shown.length === 0
         ? html`<div className="empty">
             <b>${tab === "active" ? "Активных целей нет" : "Выполненных целей пока нет"}</b>
@@ -867,6 +1016,7 @@ function ListScreen({ goals, tab, setTab, pendingId, onOpen, onAskDelete, onCanc
                    onOpen=${() => onOpen(g.id)} onAskDelete=${() => onAskDelete(g.id)}
                    onCancelDelete=${onCancelDelete} onDelete=${() => onDelete(g.id)} />`)}
           </div>`}
+      </div>
       <button type="button" className="fab" aria-label="Новая цель" onClick=${onAdd}><${Icon} name="plus" size=${28} /></button>
     </div>
   `;
@@ -1019,8 +1169,11 @@ function DetailScreen({ goal, onBack, onMenu, onAdd, onDeleteOp }) {
     else groups.push({ key: k, date: d, items: [t] });
   });
 
+  // свайп вправо по экрану цели = «назад» (как системный жест); у полей ввода и нижней панели жест отключён
+  const sw = useSwipe({ canSwipe: (dir) => dir === 1, onSwipe: () => onBack(), ignore: ignoreFields });
   return html`
-    <div>
+    <div className="swipe-area" ...${sw.bind}>
+      <div className="pane" style=${sw.style}>
       <div className="hero">
         <div className="topbar">
           <button type="button" className="icon-btn" aria-label="Назад" onClick=${onBack}><${Icon} name="chevL" size=${26} /></button>
@@ -1056,6 +1209,7 @@ function DetailScreen({ goal, onBack, onMenu, onAdd, onDeleteOp }) {
               </section>
             `)}
           </div>`}
+      </div>
 
       ${isMoney(goal)
         ? html`<${TopUpBar} saved=${savedOf(goal)} target=${goal.target} onAdd=${onAdd} />`
@@ -1209,13 +1363,14 @@ function App() {
       history: [],
       ...(v.type === "stages" ? { stages: v.stages } : {}),
     }, ...gs]);
-    const finished = v.type === "money" && v.target > 0 && v.initial >= v.target; // у поэтапной начальной суммы нет
+    const finished = v.target > 0 && v.initial >= v.target; // цель закрыта начальной суммой
     setTab(finished ? "done" : "active");
     close();
     if (finished) launchConfetti(); // цель закрыта начальной суммой — салют сразу при создании
   };
   const editGoal = (id, v) => {
     patchGoal(id, (g) => ({ ...g, name: v.name, target: v.target, period: v.period, unit: v.unit, image: v.image, color: v.color, createdAt: v.createdAt,
+      ...(g.type !== "goal" ? { initial: v.initial } : {}),
       ...(g.type === "stages" && v.stages ? { stages: v.stages, target: v.target } : {}) }));
     close();
   };
