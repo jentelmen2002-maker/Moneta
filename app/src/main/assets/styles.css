@@ -674,3 +674,25 @@ body::before { transform: translateZ(0); } /* НЕ ставить transform на
 .btn { border-color: transparent; }
 .btn-plain, .cbtn-cancel { border-color: transparent; }
 button:focus-visible, [role="tab"]:focus-visible, .goal-card:focus-visible { outline: 2px solid rgba(255, 255, 255, .9); outline-offset: 1px; }
+
+/* =====================================================================
+   НОВЫЙ ФОН (фиолетово-зелёный, bg.jpg) — фон неподвижен и не участвует в свайпах
+   Старый голубой фон: bg.blue.jpg (чтобы вернуть, переименуйте его в bg.jpg).
+   ===================================================================== */
+html { background: #2A2260; overflow-x: clip; }
+body { overflow-x: clip; }
+.app, .swipe-area { overflow-x: clip; } /* сдвинутая при свайпе панель не растягивает страницу вбок */
+body::before, .fs-overlay {
+  background: linear-gradient(rgba(8, 10, 40, .22), rgba(8, 10, 40, .22)), url("bg.jpg") center / cover no-repeat, #2A2260;
+}
+body::before { contain: strict; }
+/* подписи прямо на фоне — белые */
+.fl, .total, .empty, .hint-text, .btotal, .avatar-remove, .fs-body .hint-text { color: rgba(255, 255, 255, .92); text-shadow: 0 1px 4px rgba(10, 8, 40, .55); }
+.empty b, .btotal b { color: #fff; }
+.fs-body .error { color: #FFC2C2; text-shadow: 0 1px 4px rgba(10, 8, 40, .6); }
+.avatar-remove:hover { color: #FFC2C2; }
+.btotal { border-top-color: rgba(255, 255, 255, .45); }
+.bstage { background: rgba(255, 255, 255, .80); }
+.badd-stage { background: rgba(255, 255, 255, .88); border-color: rgba(255, 255, 255, .95); }
+.colorbtn { background-color: rgba(255, 255, 255, .85) !important; }
+.chip { background: rgba(255, 255, 255, .85); }
