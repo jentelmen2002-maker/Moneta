@@ -662,3 +662,15 @@ body::before { transform: translateZ(0); } /* НЕ ставить transform на
 .seg button { color: #1E3A6E; font-weight: 600; }
 .seg .seg-ind, .seg.blue .seg-ind { background: var(--frost-btn); border-color: var(--frost-line); box-shadow: none; }
 .seg button.near, .seg.blue button.near { color: #fff; }
+
+/* без синих обводок: вкладки, поля в фокусе, значки, кнопка цвета, пунктирная «Добавить этап» */
+.seg, .seg.blue { border: 1px solid rgba(255, 255, 255, .95); box-shadow: 0 3px 10px rgba(25, 70, 175, .10); }
+.seg .seg-ind, .seg.blue .seg-ind { border-color: transparent; }
+.fin:focus-within, .field:focus-within { border-color: #fff; background: #fff; box-shadow: 0 2px 10px rgba(25, 70, 175, .14); }
+.chip[aria-pressed="true"] { border-color: transparent; }
+.stage-state.run { border-color: rgba(190, 215, 250, .9); }
+.colorbtn { border-color: rgba(255, 255, 255, .95) !important; }
+.badd-stage { border: 1.5px dashed rgba(10, 35, 80, .28); background: rgba(255, 255, 255, .45); }
+.btn { border-color: transparent; }
+.btn-plain, .cbtn-cancel { border-color: transparent; }
+button:focus-visible, [role="tab"]:focus-visible, .goal-card:focus-visible { outline: 2px solid rgba(255, 255, 255, .9); outline-offset: 1px; }

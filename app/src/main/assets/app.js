@@ -1,7 +1,10 @@
 /* ---------- Постоянное хранилище (Persistent Storage) ----------
    Просим браузер НЕ удалять данные сайта при нехватке места и «очистке кэша». */
+// Запросы к системе откладываем на «свободное время» и на несколько секунд: на Android они блокируют основной поток,
+// и если сделать их при запуске или на первом касании, первое нажатие на «+» подлагивает.
+const whenIdle = (fn, ms) => setTimeout(() => { if (window.requestIdleCallback) requestIdleCallback(fn, { timeout: 4000 }); else fn(); }, ms);
 if (navigator.storage && navigator.storage.persist) {
-  navigator.storage.persist();
+  whenIdle(() => { try { navigator.storage.persist().catch(() => {}); } catch (e) {} }, 4000);
 }
 // Firefox и Safari выдают разрешение только после действия пользователя, а Chrome учитывает вовлечённость:
 // повторяем запрос при первом касании и ещё раз после первой сохранённой цели.
@@ -13,10 +16,17 @@ function requestPersistentStorage() {
     else ask();
   } catch (e) { /* не поддерживается */ }
 }
-window.addEventListener("pointerdown", requestPersistentStorage, { once: true });
+window.addEventListener("pointerdown", () => whenIdle(requestPersistentStorage, 5000), { once: true });
 
 
 const { useState, useEffect, useLayoutEffect, useRef } = React;
+// Фон декодируем заранее, на свободном времени: иначе первое открытие формы тратит кадры на его распаковку
+whenIdle(() => {
+  try {
+    const m = /url\(["']?([^"')]+)["']?\)/.exec(getComputedStyle(document.body, "::before").backgroundImage || "");
+    if (m) { const im = new Image(); im.src = m[1]; if (im.decode) im.decode().catch(() => {}); }
+  } catch (e) {}
+}, 600);
 const html = htm.bind(React.createElement);
 
 /* ---------- helpers ---------- */
@@ -680,6 +690,13 @@ function GoalScreen({ initial, onSubmit, onClose }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Курсор в поле названия ставим уже ПОСЛЕ открытия экрана: клавиатура, выезжающая во время показа формы, давала рывок
+  useEffect(() => {
+    if (editing) return;
+    const t = setTimeout(() => { const el = document.getElementById("f-name"); if (el) el.focus({ preventScroll: true }); }, 420);
+    return () => clearTimeout(t);
+  }, []);
+
   // Календарь открывается по клику в ЛЮБОМ месте блока «Дата начала»: контейнер, текст, иконка.
   // Сам <input type="date"> лежит под блоком невидимым и клики не принимает (pointer-events: none),
   // поэтому календарь вызывает только этот обработчик, и дважды он не откроется.
@@ -784,7 +801,7 @@ function GoalScreen({ initial, onSubmit, onClose }) {
             <label className="fl" htmlFor="f-name">${meta.ask}</label>
             <div className="fin">
               <input id="f-name" type="text" maxLength="80" placeholder="Название цели" autoComplete="off"
-                     autoFocus=${!editing} value=${name} onInput=${(e) => { setName(e.target.value); setError(""); }} />
+                     value=${name} onInput=${(e) => { setName(e.target.value); setError(""); }} />
             </div>
           </div>
 
