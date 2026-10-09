@@ -1171,9 +1171,22 @@ function DetailScreen({ goal, onBack, onMenu, onAdd, onDeleteOp }) {
 
   // свайп вправо по экрану цели = «назад» (как системный жест); у полей ввода и нижней панели жест отключён
   const sw = useSwipe({ canSwipe: (dir) => dir === 1, onSwipe: () => onBack(), ignore: ignoreFields });
+  // Пустая история центрируется по высоте между последним блоком и нижней панелью ввода:
+  // высота панели измеряется и кладётся в --bar-h (панель лежит вне .pane, поэтому её надо учесть отдельно)
+  const paneRef = useRef(null);
+  useLayoutEffect(() => {
+    const upd = () => {
+      const pane = paneRef.current, bar = pane && pane.parentNode && pane.parentNode.querySelector(".actionbar");
+      if (pane && bar) pane.style.setProperty("--bar-h", bar.offsetHeight + "px");
+    };
+    upd();
+    window.addEventListener("resize", upd);
+    const t = setTimeout(upd, 60); // после шрифтов и появления подсказок в панели
+    return () => { window.removeEventListener("resize", upd); clearTimeout(t); };
+  });
   return html`
     <div className="swipe-area" ...${sw.bind}>
-      <div className="pane" style=${sw.style}>
+      <div className="pane detail-pane" ref=${paneRef} style=${sw.style}>
       <div className="hero">
         <div className="topbar">
           <button type="button" className="icon-btn" aria-label="Назад" onClick=${onBack}><${Icon} name="chevL" size=${26} /></button>
