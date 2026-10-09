@@ -635,7 +635,7 @@ input:focus, input:focus-visible { outline: none; }
    полупрозрачности, блике, кромке и тени.
    ===================================================================== */
 *, *::before, *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-body::before, .fs-overlay { transform: translateZ(0); }
+body::before { transform: translateZ(0); } /* НЕ ставить transform на .fs-overlay: внутри него position:fixed у нижней панели начнёт прокручиваться вместе с формой */
 :root {
   --glass-bg: linear-gradient(160deg, rgba(255, 255, 255, .86) 0%, rgba(255, 255, 255, .66) 100%), rgba(120, 170, 255, .10);
   --glass-line: rgba(255, 255, 255, 1);
@@ -656,3 +656,9 @@ body::before, .fs-overlay { transform: translateZ(0); }
 .btn-plain, .cbtn-cancel { background: rgba(255, 255, 255, .92); }
 .actionbar { background: linear-gradient(160deg, #FFFFFF, #F1F7FF); }
 .actionbar .fin, .actionbar .field, .actionbar .btn-plain { background: #FFFFFF; }
+
+/* переключатель «Активные / Выполненные» и остальные: контрастная синяя плашка */
+.seg, .seg.blue { background: rgba(255, 255, 255, .78); border: 1.5px solid rgba(47, 128, 245, .45); }
+.seg button { color: #1E3A6E; font-weight: 600; }
+.seg .seg-ind, .seg.blue .seg-ind { background: var(--frost-btn); border-color: var(--frost-line); box-shadow: none; }
+.seg button.near, .seg.blue button.near { color: #fff; }

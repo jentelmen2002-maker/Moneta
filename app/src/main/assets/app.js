@@ -709,7 +709,7 @@ function GoalScreen({ initial, onSubmit, onClose }) {
   };
 
   const meta = staged ? { ask: "Что хотим сделать?" } : {
-    money: { ask: "На что копим?", label: "Какую сумму копим?", placeholder: "Без суммы", affix: "₽", integer: false },
+    money: { ask: "На что копим?", label: "Какую сумму копим?", placeholder: "Например, 100 000", affix: "₽", integer: false },
     goal: { ask: "Что хотим достичь?", label: "Целевое значение", placeholder: "Например, 10", affix: unit.trim(), integer: false },
   }[type];
 
@@ -733,10 +733,8 @@ function GoalScreen({ initial, onSubmit, onClose }) {
     }
     let t = 0;
     if (type === "money") {
-      if (target.trim()) {
-        t = parseMoney(target);
-        if (!(t > 0)) return setError("Укажите сумму больше нуля или оставьте поле пустым.");
-      }
+      t = parseMoney(target); // сумма, которую копим, обязательна
+      if (!target.trim() || !(t > 0)) return setError("Укажите сумму, которую копим (больше нуля).");
     } else {
       t = parseMoney(target);
       if (!(t > 0)) return setError("Укажите целевое значение больше нуля.");
