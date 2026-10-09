@@ -425,9 +425,9 @@ html { background: #DCEBFC; }
 body { background: transparent; color: var(--ink); }
 body::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background: url("bg.jpg") center / cover no-repeat, #DCEBFC;
+  background: #DCEBFC;
 }
-.fs-overlay { background: url("bg.jpg") center / cover no-repeat, #DCEBFC; color: var(--ink); }
+.fs-overlay { background: #DCEBFC; color: var(--ink); }
 :focus-visible { outline-color: var(--blue); }
 
 /* плашки: прозрачное стекло с бликом, размытием фона и светлой кромкой */
@@ -679,20 +679,50 @@ button:focus-visible, [role="tab"]:focus-visible, .goal-card:focus-visible { out
    НОВЫЙ ФОН (фиолетово-зелёный, bg.jpg) — фон неподвижен и не участвует в свайпах
    Старый голубой фон: bg.blue.jpg (чтобы вернуть, переименуйте его в bg.jpg).
    ===================================================================== */
-html { background: #2A2260; overflow-x: clip; }
+html { background: var(--app-base, #DCEBFC); overflow-x: clip; }
 body { overflow-x: clip; }
 .app, .swipe-area { overflow-x: clip; } /* сдвинутая при свайпе панель не растягивает страницу вбок */
 body::before, .fs-overlay {
-  background: linear-gradient(rgba(8, 10, 40, .22), rgba(8, 10, 40, .22)), url("bg.jpg") center / cover no-repeat, #2A2260;
+  background: linear-gradient(rgba(8, 10, 40, var(--app-veil, .22)), rgba(8, 10, 40, var(--app-veil, .22))), var(--app-bg, url("bg.blue.jpg")) center / cover no-repeat, var(--app-base, #DCEBFC);
 }
 body::before { contain: strict; }
 /* подписи прямо на фоне — белые */
-.fl, .total, .empty, .hint-text, .btotal, .avatar-remove, .fs-body .hint-text { color: rgba(255, 255, 255, .92); text-shadow: 0 1px 4px rgba(10, 8, 40, .55); }
-.empty b, .btotal b { color: #fff; }
-.fs-body .error { color: #FFC2C2; text-shadow: 0 1px 4px rgba(10, 8, 40, .6); }
-.avatar-remove:hover { color: #FFC2C2; }
-.btotal { border-top-color: rgba(255, 255, 255, .45); }
+.fl, .total, .empty, .hint-text, .btotal, .avatar-remove, .fs-body .hint-text { color: var(--on-bg, rgba(11, 42, 92, .80)); text-shadow: var(--on-bg-shadow, none); }
+.empty b, .btotal b { color: var(--on-bg-strong, #0B2A5C); }
+.fs-body .error { color: var(--on-bg-error, #C62839); text-shadow: var(--on-bg-shadow, none); }
+.avatar-remove:hover { color: var(--on-bg-error, #C62839); }
+.btotal { border-top-color: var(--on-bg-line, rgba(11, 42, 92, .22)); }
 .bstage { background: rgba(255, 255, 255, .80); }
 .badd-stage { background: rgba(255, 255, 255, .88); border-color: rgba(255, 255, 255, .95); }
 .colorbtn { background-color: rgba(255, 255, 255, .85) !important; }
 .chip { background: rgba(255, 255, 255, .85); }
+
+/* выбор фона */
+.bg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 12px; margin: 2px 0 14px; }
+.bg-tile { padding: 0; background: none; border: none; text-align: center; color: var(--ink); font-size: 13px; }
+.bg-thumb { position: relative; display: block; aspect-ratio: 3 / 4.2; border-radius: 18px; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(10, 20, 60, .25); }
+.bg-own { display: grid; place-items: center; background: rgba(210, 225, 250, .7); color: rgba(11, 42, 92, .6); }
+.bg-name { display: block; margin-top: 6px; font-weight: 500; }
+.bg-tile[aria-pressed="true"] .bg-thumb { outline: 3px solid var(--btn); outline-offset: 2px; }
+.bg-tile[aria-pressed="true"] .bg-thumb::after {
+  content: "✓"; position: absolute; right: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--btn); color: #fff; font-size: 13px; line-height: 1;
+}
+.sheet .sheet-text { margin: 0 0 14px; }
+
+/* кнопка выбора фона: круглое стекло в левом нижнем углу (зеркально «+») */
+.fab-bg {
+  position: fixed; z-index: 5; left: max(16px, calc(50% - 240px + 16px));
+  bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+  width: 48px; height: 48px; padding: 0; border-radius: 50%; display: grid; place-items: center;
+  background: linear-gradient(160deg, rgba(255, 255, 255, .92), rgba(255, 255, 255, .72)); color: #0B2A5C;
+  border: 1px solid #fff; box-shadow: 0 6px 16px rgba(25, 70, 175, .24);
+}
+.fab-bg:active { filter: brightness(.95); }
+
+/* шторка: ручка для свайпа вниз */
+.grip-zone { padding: 2px 0 14px; touch-action: none; cursor: grab; }
+.grip { margin: 0 auto; }
+.sheet { overscroll-behavior: contain; }
+.sheet-actions .btn { max-width: none; }
+.sheet.fit { touch-action: none; }

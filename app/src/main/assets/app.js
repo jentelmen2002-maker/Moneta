@@ -585,13 +585,194 @@ function Sheet({ label, onClose, children }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Свайп вниз закрывает шторку. Тянуть можно за «ручку» сверху; если содержимое шторки не прокручивается,
+  // то и за любое место (кроме полей ввода). Сдвиг обновляется не чаще раза за кадр.
+  const ref = useRef(null);
+  const [dy, setDy] = useState(0);
+  const [phase, setPhase] = useState("idle"); // idle | drag | out
+  const st = useRef(null), raf = useRef(0), pend = useRef(0), draggedAt = useRef(-1e9), timer = useRef(0);
+  const logic = useRef({});
+  const stableMove = useRef((e) => logic.current.move(e)).current;
+  const stableUp = useRef((e) => logic.current.end(e, false)).current;
+  const stableCancel = useRef((e) => logic.current.end(e, true)).current;
+  const detach = () => {
+    window.removeEventListener("pointermove", stableMove);
+    window.removeEventListener("pointerup", stableUp);
+    window.removeEventListener("pointercancel", stableCancel);
+    st.current = null;
+  };
+  useEffect(() => () => { detach(); cancelAnimationFrame(raf.current); clearTimeout(timer.current); }, []);
+  logic.current.move = (e) => {
+    const s = st.current;
+    if (!s || e.pointerId !== s.id) return;
+    const mx = e.clientX - s.x, my = e.clientY - s.y;
+    if (!s.started) {
+      if (Math.abs(mx) > 8 && Math.abs(mx) > Math.abs(my)) { detach(); return; } // горизонтальный жест — не наш
+      if (my < -8) { detach(); return; }                                          // вверх — прокрутка
+      if (my < 8) return;
+      s.started = true; setPhase("drag");
+    }
+    const dt = e.timeStamp - s.lastT;
+    if (dt > 0) s.v = (e.clientY - s.lastY) / dt;
+    s.lastY = e.clientY; s.lastT = e.timeStamp; s.dy = Math.max(0, my);
+    pend.current = s.dy;
+    if (!raf.current) raf.current = requestAnimationFrame(() => { raf.current = 0; setDy(pend.current); });
+  };
+  logic.current.end = (e, cancelled) => {
+    const s = st.current;
+    detach();
+    cancelAnimationFrame(raf.current); raf.current = 0;
+    if (!s || !s.started) return;
+    draggedAt.current = performance.now();
+    const h = (ref.current && ref.current.offsetHeight) || 400;
+    if (!cancelled && (s.dy > Math.min(120, h * 0.3) || (s.v > 0.4 && s.dy > 30))) {
+      setPhase("out"); setDy(h + 40);
+      timer.current = setTimeout(onClose, 200);
+    } else { setPhase("idle"); setDy(0); }
+  };
+  const onPointerDown = (e) => {
+    if (phase === "out") return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const el = ref.current, t = e.target;
+    if (t.closest && t.closest("input, textarea, select")) return;
+    const onGrip = !!(t.closest && t.closest(".grip-zone"));
+    const scrollable = el.scrollHeight > el.clientHeight + 1;
+    if (!onGrip && (scrollable || el.scrollTop > 0)) return;
+    detach();
+    st.current = { id: e.pointerId, x: e.clientX, y: e.clientY, lastY: e.clientY, lastT: e.timeStamp, v: 0, dy: 0, started: false };
+    window.addEventListener("pointermove", stableMove);
+    window.addEventListener("pointerup", stableUp);
+    window.addEventListener("pointercancel", stableCancel);
+  };
+  const onClickCapture = (e) => { if (performance.now() - draggedAt.current < 350) { e.stopPropagation(); e.preventDefault(); } };
+  // если содержимое помещается без прокрутки, шторку можно тянуть за любое место: отдаём жест нам, а не браузеру
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) el.classList.toggle("fit", el.scrollHeight <= el.clientHeight + 1);
+  });
+  const sheetStyle = {
+    transform: "translate3d(0," + dy + "px,0)",
+    transition: phase === "drag" ? "none" : phase === "out" ? "transform .2s ease-in" : "transform .26s cubic-bezier(.2,.8,.2,1)",
+  };
   return html`
     <div className="overlay" onClick=${onClose}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label=${label} onClick=${(e) => e.stopPropagation()}>
-        <div className="grip"></div>
+      <div className="sheet" ref=${ref} role="dialog" aria-modal="true" aria-label=${label} style=${sheetStyle}
+           onClick=${(e) => e.stopPropagation()} onPointerDown=${onPointerDown} onClickCapture=${onClickCapture}>
+        <div className="grip-zone"><div className="grip"></div></div>
         ${children}
       </div>
     </div>
+  `;
+}
+
+
+/* ---------- Фон приложения: готовые варианты и своё фото ----------
+   Выбор хранится на устройстве (localStorage). Фон задают две CSS-переменные на <html>:
+   --app-bg (картинка или градиент) и --app-veil (сила затемнения, чтобы белые подписи читались). */
+const BG_KEY = "moneta-bg-v1", BG_PHOTO_KEY = "moneta-bg-photo-v1";
+const BG_PRESETS = [
+  // tone: "light" — светлый фон, подписи на нём тёмные; "dark" — тёмный/яркий фон, подписи белые (+ затемнение veil)
+  { id: "blue", name: "Небо", css: 'url("bg.blue.jpg")', veil: 0, tone: "light", base: "#DCEBFC", theme: "#DCEBFC" },
+  { id: "sunset", name: "Закат", css: "linear-gradient(180deg, #8F82A6 0%, #B79AA6 24%, #E6A08A 50%, #F2905A 76%, #F2693A 100%)", veil: 0.22, tone: "dark", base: "#8F82A6", theme: "#8F82A6" },
+  { id: "mint", name: "Мята", css: "linear-gradient(160deg, #0F766E 0%, #34D399 55%, #A7F3D0 100%)", veil: 0.26, tone: "dark", base: "#0F766E", theme: "#0F766E" },
+  { id: "night", name: "Ночь", css: "linear-gradient(170deg, #0B1020 0%, #1E1B4B 55%, #312E81 100%)", veil: 0, tone: "dark", base: "#0B1020", theme: "#0B1020" },
+  { id: "violet", name: "Фиолет", css: 'url("bg.jpg")', veil: 0.22, tone: "dark", base: "#2A2260", theme: "#3B2F95" },
+];
+const BG_DEFAULT = "blue";
+const bgChoiceRead = () => { try { const j = JSON.parse(localStorage.getItem(BG_KEY) || "null"); return j && typeof j.id === "string" ? j.id : BG_DEFAULT; } catch (e) { return BG_DEFAULT; } };
+const bgPhotoRead = () => { try { const j = JSON.parse(localStorage.getItem(BG_PHOTO_KEY) || "null"); return j && typeof j.url === "string" ? j : null; } catch (e) { return null; } };
+function bgCssOf(id) {
+  if (id === "custom") {
+    const ph = bgPhotoRead();
+    if (ph) return { css: 'url("' + ph.url + '")', veil: ph.veil, tone: ph.tone || "dark", base: "#1E1B4B", theme: "#1E1B4B" };
+  }
+  const p = BG_PRESETS.find((x) => x.id === id) || BG_PRESETS.find((x) => x.id === BG_DEFAULT);
+  return p;
+}
+const BG_TONES = { // цвета подписей, лежащих прямо на фоне
+  light: { text: "rgba(11, 42, 92, .80)", strong: "#0B2A5C", shadow: "none", error: "#C62839", line: "rgba(11, 42, 92, .22)" },
+  dark: { text: "rgba(255, 255, 255, .92)", strong: "#FFFFFF", shadow: "0 1px 4px rgba(10, 8, 40, .55)", error: "#FFC2C2", line: "rgba(255, 255, 255, .45)" },
+};
+function applyBg(id) {
+  const o = bgCssOf(id), st = document.documentElement.style, t = BG_TONES[o.tone] || BG_TONES.dark;
+  st.setProperty("--app-bg", o.css);
+  st.setProperty("--app-veil", String(o.veil));
+  st.setProperty("--app-base", o.base);
+  st.setProperty("--on-bg", t.text); st.setProperty("--on-bg-strong", t.strong); st.setProperty("--on-bg-shadow", t.shadow);
+  st.setProperty("--on-bg-error", t.error); st.setProperty("--on-bg-line", t.line);
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", o.theme);
+}
+// Своё фото: уменьшаем до 1600 px по длинной стороне (иначе на телефоне будет тормозить) и подбираем затемнение по яркости снимка
+function bgFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      try {
+        const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        const sm = document.createElement("canvas"); sm.width = sm.height = 16;
+        const sx = sm.getContext("2d"); sx.drawImage(c, 0, 0, 16, 16);
+        const d = sx.getImageData(0, 0, 16, 16).data; let sum = 0;
+        for (let i = 0; i < d.length; i += 4) sum += (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+        const lum = sum / 256;
+        const veil = Math.round(Math.max(0.18, Math.min(0.5, 0.18 + (lum - 0.3) * 0.7)) * 100) / 100;
+        const light = lum > 0.72; // очень светлое фото: без затемнения, подписи тёмные
+        resolve({ url: c.toDataURL("image/jpeg", 0.78), veil: light ? 0 : veil, tone: light ? "light" : "dark" });
+      } catch (e) { reject(e); } finally { URL.revokeObjectURL(url); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image")); };
+    img.src = url;
+  });
+}
+applyBg(bgChoiceRead());
+
+function BgSheet({ onClose }) {
+  const [sel, setSel] = useState(bgChoiceRead);
+  const [photo, setPhoto] = useState(bgPhotoRead);
+  const [err, setErr] = useState("");
+  const fileRef = useRef(null);
+  const choose = (id) => {
+    setSel(id); setErr("");
+    try { localStorage.setItem(BG_KEY, JSON.stringify({ id })); } catch (e) { /* не сохранится, но на экране фон поменяется */ }
+    applyBg(id);
+  };
+  const pick = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return setErr("Выберите файл изображения.");
+    try {
+      const ph = await bgFromFile(file);
+      try { localStorage.setItem(BG_PHOTO_KEY, JSON.stringify(ph)); }
+      catch (e2) { return setErr("Фото не поместилось в память приложения. Выберите поменьше."); }
+      setPhoto(ph); choose("custom");
+    } catch (e3) { setErr("Не удалось открыть это изображение. Попробуйте другое."); }
+  };
+  const thumb = (css, veil) => ({ background: "linear-gradient(rgba(8,10,40," + veil + "), rgba(8,10,40," + veil + ")), " + css + " center / cover no-repeat" });
+  return html`
+    <${Sheet} label="Фон приложения" onClose=${onClose}>
+      <h2 className="sheet-title">Фон приложения</h2>
+      <div className="bg-grid" role="group" aria-label="Варианты фона">
+        ${BG_PRESETS.map((p) => html`
+          <button key=${p.id} type="button" className="bg-tile" aria-pressed=${sel === p.id} onClick=${() => choose(p.id)}>
+            <span className="bg-thumb" style=${thumb(p.css, p.veil)}></span><span className="bg-name">${p.name}</span>
+          </button>`)}
+        <button type="button" className="bg-tile" aria-pressed=${sel === "custom"}
+                onClick=${() => (photo ? choose("custom") : fileRef.current && fileRef.current.click())}>
+          <span className="bg-thumb bg-own" style=${photo ? thumb('url("' + photo.url + '")', photo.veil || 0) : undefined}>
+            ${photo ? null : html`<${Icon} name="image" size=${28} />`}
+          </span><span className="bg-name">Своё фото</span>
+        </button>
+      </div>
+      <input ref=${fileRef} type="file" accept="image/*" hidden onChange=${pick} />
+      ${err && html`<p className="error" role="alert">${err}</p>`}
+      <div className="sheet-actions">
+        <button type="button" className="btn btn-blue" onClick=${() => fileRef.current && fileRef.current.click()}>${photo ? "Другое фото" : "Выбрать фото"}</button>
+      </div>
+    <//>
   `;
 }
 
@@ -996,7 +1177,7 @@ function GoalCard({ goal, confirming, onOpen, onAskDelete, onCancelDelete, onDel
   `;
 }
 
-function ListScreen({ goals, tab, setTab, pendingId, onOpen, onAskDelete, onCancelDelete, onDelete, onAdd }) {
+function ListScreen({ goals, tab, setTab, pendingId, onOpen, onAskDelete, onCancelDelete, onDelete, onAdd, onBg }) {
   const active = goals.filter((g) => !isDone(g));
   const done = goals.filter(isDone);
   const shown = tab === "active" ? active : done;
@@ -1036,6 +1217,7 @@ function ListScreen({ goals, tab, setTab, pendingId, onOpen, onAskDelete, onCanc
                    onCancelDelete=${onCancelDelete} onDelete=${() => onDelete(g.id)} />`)}
           </div>`}
       </div>
+      <button type="button" className="fab-bg" aria-label="Фон приложения" onClick=${onBg}><${Icon} name="palette" size=${24} /></button>
       <button type="button" className="fab" aria-label="Новая цель" onClick=${onAdd}><${Icon} name="plus" size=${28} /></button>
     </div>
   `;
@@ -1434,8 +1616,9 @@ function App() {
         : html`<${ListScreen} goals=${goals} tab=${tab} setTab=${(t) => { cancelDelete(); setTab(t); }}
             pendingId=${pendingDelete} onAskDelete=${askDelete} onCancelDelete=${cancelDelete} onDelete=${confirmDelete}
             onOpen=${openGoal}
-            onAdd=${() => showSheet({ type: "add" })} />`}
+            onAdd=${() => showSheet({ type: "add" })} onBg=${() => showSheet({ type: "bg" })} />`}
 
+      ${sheet && sheet.type === "bg" && html`<${BgSheet} onClose=${close} />`}
       ${sheet && sheet.type === "add" && html`
         <${GoalScreen} onSubmit=${addGoal} onClose=${close} />`}
       ${sg && sheet.type === "edit" && html`
