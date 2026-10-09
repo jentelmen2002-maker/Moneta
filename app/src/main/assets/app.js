@@ -455,9 +455,11 @@ function useSwipe({ onSwipe, canSwipe, animateOut = true, ignore }) {
   const st = useRef(null);
   const swipedAt = useRef(-1e9);
   const timer = useRef(null);
+  const raf = useRef(0); // обновление сдвига не чаще одного раза за кадр: иначе экран перерисовывается на каждое событие касания
+  const pendingDx = useRef(0);
   const cb = useRef({});
   cb.current = { onSwipe, canSwipe, animateOut };
-  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(() => () => { clearTimeout(timer.current); cancelAnimationFrame(raf.current); }, []);
 
   // Обработчики window должны быть одними и теми же функциями на всё время жеста,
   // поэтому они читают актуальную логику через ref'ы.
@@ -485,11 +487,13 @@ function useSwipe({ onSwipe, canSwipe, animateOut = true, ignore }) {
     const dt = e.timeStamp - s.lastT;
     if (dt > 0) s.v = (e.clientX - s.lastX) / dt;
     s.lastX = e.clientX; s.lastT = e.timeStamp; s.dx = mx;
-    setDx(cb.current.canSwipe(mx < 0 ? -1 : 1) ? mx : mx * 0.25); // за краем: «резинка»
+    pendingDx.current = cb.current.canSwipe(mx < 0 ? -1 : 1) ? mx : mx * 0.25; // за краем: «резинка»
+    if (!raf.current) raf.current = requestAnimationFrame(() => { raf.current = 0; setDx(pendingDx.current); });
   };
   logic.current.end = (e, cancelled) => {
     const s = st.current;
     detach();
+    cancelAnimationFrame(raf.current); raf.current = 0; // отложенный кадр не должен перебить итоговое положение
     if (!s || !s.locked) return;
     swipedAt.current = performance.now();
     const dir = s.dx < 0 ? -1 : 1;
@@ -1183,7 +1187,7 @@ function DetailScreen({ goal, onBack, onMenu, onAdd, onDeleteOp }) {
     window.addEventListener("resize", upd);
     const t = setTimeout(upd, 60); // после шрифтов и появления подсказок в панели
     return () => { window.removeEventListener("resize", upd); clearTimeout(t); };
-  });
+  }, [goal.id, groups.length]);
   return html`
     <div className="swipe-area" ...${sw.bind}>
       <div className="pane detail-pane" ref=${paneRef} style=${sw.style}>

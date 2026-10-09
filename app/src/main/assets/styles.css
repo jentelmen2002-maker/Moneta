@@ -356,7 +356,7 @@
 /* ---------- свайпы ---------- */
 .swipe-area { min-height: 100vh; touch-action: pan-y; } /* вертикальную прокрутку ведёт браузер, горизонтальные жесты ловим сами */
 .seg.swipeable { touch-action: pan-y; }
-.pane { will-change: transform; }
+.pane { }
 @media (prefers-reduced-motion: no-preference) {
   .pane.from-right { animation: pane-in-r .3s cubic-bezier(.2, .8, .2, 1) both; }
   .pane.from-left { animation: pane-in-l .3s cubic-bezier(.2, .8, .2, 1) both; }
@@ -627,3 +627,32 @@ input:focus, input:focus-visible { outline: none; }
   padding: 24px 24px calc(var(--bar-h, 150px) + 24px);
 }
 .detail-pane > .empty b { margin-bottom: 6px; }
+
+/* =====================================================================
+   ПЛАВНОСТЬ + СВЕТЛЫЕ ПЛАШКИ
+   Размытие фона (backdrop-filter) отключено: фон — плавный градиент, на вид оно ничего не давало,
+   зато на телефоне перерисовывалось на каждом кадре прокрутки и свайпа. Стекло держится на
+   полупрозрачности, блике, кромке и тени.
+   ===================================================================== */
+*, *::before, *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+body::before, .fs-overlay { transform: translateZ(0); }
+:root {
+  --glass-bg: linear-gradient(160deg, rgba(255, 255, 255, .86) 0%, rgba(255, 255, 255, .66) 100%), rgba(120, 170, 255, .10);
+  --glass-line: rgba(255, 255, 255, 1);
+  --glass-shadow: inset 0 1px 0 #fff, 0 6px 18px rgba(25, 70, 175, .16);
+  --ink: #0A2350;
+  --muted: rgba(10, 35, 80, .70);
+}
+.goal-card:active { background: linear-gradient(160deg, rgba(255, 255, 255, .94), rgba(255, 255, 255, .78)), rgba(120, 170, 255, .14); }
+.actionbar { background: linear-gradient(160deg, rgba(255, 255, 255, .94), rgba(244, 249, 255, .90)); box-shadow: 0 -6px 18px rgba(25, 70, 175, .14); }
+.bstage { background: rgba(255, 255, 255, .55); border-color: #fff; }
+.fin, .field { background: rgba(255, 255, 255, .80); box-shadow: none; }
+.seg, .seg.blue { background: rgba(255, 255, 255, .55); box-shadow: 0 3px 10px rgba(25, 70, 175, .12); }
+.pill, .stage-state, .stage-state.wait { background: #fff; border-color: rgba(190, 215, 250, .9); }
+.track { background: rgba(190, 215, 250, .55); }
+.fab { box-shadow: 0 6px 16px rgba(25, 70, 175, .28); background-color: rgba(255, 255, 255, .55); }
+.overlay { background: rgba(15, 50, 120, .34); }
+.sheet { background: linear-gradient(160deg, rgba(255, 255, 255, .98), rgba(244, 249, 255, .96)); }
+.btn-plain, .cbtn-cancel { background: rgba(255, 255, 255, .92); }
+.actionbar { background: linear-gradient(160deg, #FFFFFF, #F1F7FF); }
+.actionbar .fin, .actionbar .field, .actionbar .btn-plain { background: #FFFFFF; }
