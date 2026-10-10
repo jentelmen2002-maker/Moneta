@@ -45,7 +45,7 @@ const round2 = (n) => Math.round(n * 100) / 100;
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 function parseMoney(value) {
-  const clean = String(value).replace(/[\s\u00a0₽]/g, "").replace(",", ".");
+  const clean = String(value).replace(/[\s\u00a0₽]/g, "").replace(/[.,]$/, "").replace(",", "."); // «1,» = 1
   if (!/^\d+(\.\d{1,2})?$/.test(clean)) return NaN;
   return Number(clean);
 }
@@ -274,10 +274,7 @@ function opText(g, a) {
 
 const pad = (n) => String(n).padStart(2, "0");
 function time12(d) {
-  let h = d.getHours();
-  const ap = h >= 12 ? "PM" : "AM";
-  h = h % 12 || 12;
-  return pad(h) + ":" + pad(d.getMinutes()) + " " + ap;
+  return pad(d.getHours()) + ":" + pad(d.getMinutes()); // 24-часовой формат
 }
 const stamp = (d) => pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear() + " " + time12(d);
 const dateLong = (d) => d.toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
@@ -340,11 +337,17 @@ function cleanStages(list) {
   }));
 }
 
+let storageCorrupt = false; // в localStorage лежит повреждённая запись — тогда пробуем резервную копию
+function markCorrupt(raw) {
+  storageCorrupt = true;
+  try { if (localStorage.getItem(KEY + "-corrupt") === null) localStorage.setItem(KEY + "-corrupt", String(raw).slice(0, 200000)); } catch (e) { /* ignore */ }
+}
 function loadGoals() {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const data = JSON.parse(raw);
+      if (!Array.isArray(data)) markCorrupt(raw);
       if (Array.isArray(data)) {
         return data
           .filter((g) => g && typeof g.id === "string" && typeof g.name === "string" &&
@@ -380,7 +383,7 @@ function loadGoals() {
           }));
       }
     }
-  } catch (e) { /* ignore broken storage */ }
+  } catch (e) { let r = ""; try { r = localStorage.getItem(KEY) || ""; } catch (e2) { /* ignore */ } markCorrupt(r); }
   return [];
 }
 
@@ -728,6 +731,32 @@ function bgFromFile(file) {
   });
 }
 applyBg(bgChoiceRead());
+// Высота фона = самая большая высота окна за сессию (при открытой клавиатуре окно становится ниже, и фон не должен перерисовываться)
+(function trackBgHeight() {
+  const root = document.documentElement;
+  let maxH = 0, lastW = 0;
+  const upd = () => {
+    const w = window.innerWidth, h = Math.round(window.innerHeight);
+    if (w !== lastW) { lastW = w; maxH = 0; } // поворот экрана — считаем заново
+    if (h > maxH) { maxH = h; root.style.setProperty("--bg-h", maxH + "px"); }
+  };
+  upd();
+  window.addEventListener("resize", upd);
+  // Поле в форме не должно прятаться под панелью «Сохранить», когда открыта клавиатура
+  const reveal = (el) => {
+    const ov = el.closest && el.closest(".fs-overlay"), bar = ov && ov.querySelector(".actionbar");
+    if (!ov || !bar || bar.contains(el)) return;
+    const r = el.getBoundingClientRect(), top = bar.getBoundingClientRect().top, head = ov.querySelector(".fs-head");
+    const headB = head ? head.getBoundingClientRect().bottom : 0;
+    if (r.bottom > top - 12) ov.scrollBy({ top: r.bottom - top + 16, behavior: "smooth" });
+    else if (r.top < headB + 8) ov.scrollBy({ top: r.top - headB - 12, behavior: "smooth" });
+  };
+  document.addEventListener("focusin", (e) => {
+    const el = e.target;
+    if (!el || !/^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
+    [120, 450].forEach((ms) => setTimeout(() => { if (document.activeElement === el) reveal(el); }, ms)); // второй раз — когда клавиатура уже выехала
+  });
+})();
 
 function BgSheet({ onClose }) {
   const [sel, setSel] = useState(bgChoiceRead);
@@ -1226,13 +1255,11 @@ function ListScreen({ goals, tab, setTab, pendingId, onOpen, onAskDelete, onCanc
 function TopUpBar({ saved, target, onAdd }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
-  const [note, setNote] = useState("");
 
   // Ограничения по остатку нет: можно вносить больше цели, прогресс покажет 130%, 150% и т. д.
   const deposit = (raw) => {
     onAdd(raw);
     setError("");
-    setNote("");
     return true;
   };
 
@@ -1247,7 +1274,6 @@ function TopUpBar({ saved, target, onAdd }) {
     onAdd(-amount);
     setValue("");
     setError("");
-    setNote("");
   };
   const submit = (e) => { e.preventDefault(); apply(1); };
   const preset = (n) => { deposit(n); };
@@ -1262,11 +1288,10 @@ function TopUpBar({ saved, target, onAdd }) {
         `)}
       </div>
       ${error && html`<p className="error" role="alert">${error}</p>`}
-      ${!error && note && html`<p className="hint">${note}</p>`}
       <form className="topup-row" onSubmit=${submit} noValidate>
         <div className="field">
           <${MoneyInput} aria-label="Своя сумма пополнения" placeholder="Другая сумма"
-                         value=${value} onValue=${(v) => { setValue(v); setError(""); setNote(""); }} />
+                         value=${value} onValue=${(v) => { setValue(v); setError(""); }} />
           <span className="affix">₽</span>
         </div>
         <button type="submit" className="btn btn-dark">Пополнить</button>
@@ -1281,7 +1306,7 @@ function HabitBar({ goal, onAdd }) {
     <div className="actionbar">
       ${isWeekly(goal) && reached(goal) && html`<p className="hint">Норма недели выполнена — можно отмечать и сверх неё.</p>`}
       <button type="button" className="btn btn-blue btn-pill" onClick=${() => onAdd(1)}>
-        +1  Отметить выполнение
+        +1 Отметить выполнение
       </button>
     </div>
   `;
@@ -1290,14 +1315,12 @@ function HabitBar({ goal, onAdd }) {
 function MeasureBar({ goal, onAdd }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
-  const [note, setNote] = useState("");
   const unit = unitOf(goal);
 
   // Кнопка прибавляет своё число к тому, что уже введено в поле (пустое поле = 0)
   const bump = (n) => {
     setValue((cur) => formatMoneyInput(String(round2((parseMoney(cur) || 0) + n)).replace(".", ",")));
     setError("");
-    setNote("");
   };
 
   const submit = (e) => {
@@ -1307,13 +1330,11 @@ function MeasureBar({ goal, onAdd }) {
     onAdd(amount); // перевыполнение разрешено
     setValue("");
     setError("");
-    setNote("");
   };
 
   return html`
     <div className="actionbar">
       ${error && html`<p className="error" role="alert">${error}</p>`}
-      ${!error && note && html`<p className="hint">${note}</p>`}
       <div className="presets" role="group" aria-label="Быстро прибавить к значению">
         ${STEP_PRESETS.map((n) => html`
           <button key=${n} type="button" className="btn btn-blue" onClick=${() => bump(n)}>+${n}</button>
@@ -1323,7 +1344,7 @@ function MeasureBar({ goal, onAdd }) {
         <div className="field">
           <span className="affix">+</span>
           <${MoneyInput} aria-label=${"Значение" + (unit ? ", " + unit : "")} placeholder="Например, 5" value=${value}
-                         onValue=${(v) => { setValue(v); setError(""); setNote(""); }} />
+                         onValue=${(v) => { setValue(v); setError(""); }} />
           ${unit && html`<span className="affix">${unit}</span>`}
         </div>
         <button type="submit" className="btn btn-blue">Добавить</button>
@@ -1453,8 +1474,7 @@ function App() {
 
   /* ---------- системная кнопка «Назад» (Android WebView) ----------
      Каждый «слой» интерфейса (экран цели, модальное окно) добавляет запись в history.
-     Главный экран всегда стоит на «страховочной» записи: даже если пользователь нажмёт «Назад»
-     на главном экране, мы тут же возвращаем состояние и WebView не доходит до нулевой точки истории. */
+     На главном экране своих записей нет: «Назад» там сворачивает приложение (см. MainActivity). */
   const layers = useRef([]);          // стек открытых слоёв: "screen" | "sheet" | "confirm"
   const ignorePops = useRef(0);       // сколько popstate вызвано нами самими (программное закрытие)
   const ignoreTimer = useRef(null);
@@ -1474,8 +1494,8 @@ function App() {
   };
 
   useEffect(() => {
-    // базовое состояние: под ним всегда есть запись, на которую можно «откатиться»
-    window.history.pushState({ page: "home" }, "");
+    // после перезагрузки на открытой странице-слое в истории может остаться служебная запись — делаем её обычной
+    try { if (window.history.state && window.history.state.modal) window.history.replaceState({ page: "home" }, ""); } catch (e) { /* ignore */ }
 
     const onPop = () => {
       if (ignorePops.current > 0) { ignorePops.current--; return; }
@@ -1487,8 +1507,8 @@ function App() {
         else setScreen({ name: "list" });
         return;
       }
-      // Главный экран: остаёмся на месте и возвращаем страховочную запись
-      window.history.pushState({ page: "home" }, "");
+      // Главный экран: ничего не делаем. Страховочной записи больше нет, поэтому на Android следующее «Назад»
+      // сворачивает приложение (canGoBack() == false), а не упирается в пустую запись.
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -1535,7 +1555,7 @@ function App() {
   useEffect(() => {
     let lsHasKey = false;
     try { lsHasKey = localStorage.getItem(KEY) !== null; } catch (e) { /* ignore */ }
-    if (lsHasKey) return;
+    if (lsHasKey && !storageCorrupt) return;
     readBackup().then((raw) => {
       if (!raw || goalsRef.current.length > 0) return;
       try {
@@ -1593,8 +1613,28 @@ function App() {
       return { ...g, history: [...g.history, { id: uid(), amount, at }] }; // без урезания по цели
     });
   };
+  const [undo, setUndo] = useState(null); // последняя удалённая операция: можно вернуть в течение 6 секунд
+  const undoTimer = useRef(null);
   const deleteOp = (id, opId) => {
+    const g0 = goalsRef.current.find((g) => g.id === id);
+    const idx = g0 ? g0.history.findIndex((t) => t.id === opId) : -1;
+    if (idx < 0) return;
+    const op = g0.history[idx];
     patchGoal(id, (g) => ({ ...g, history: g.history.filter((t) => t.id !== opId) }));
+    setUndo({ id, op, idx });
+    clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setUndo(null), 6000);
+  };
+  const undoDelete = () => {
+    if (!undo) return;
+    const u = undo;
+    clearTimeout(undoTimer.current);
+    setUndo(null);
+    patchGoal(u.id, (g) => {
+      if (g.history.some((t) => t.id === u.op.id)) return g;
+      const h = g.history.slice(); h.splice(Math.min(u.idx, h.length), 0, u.op);
+      return { ...g, history: h };
+    });
   };
   const deleteGoal = (id) => {
     setGoals((gs) => gs.filter((g) => g.id !== id));
@@ -1618,6 +1658,11 @@ function App() {
             onOpen=${openGoal}
             onAdd=${() => showSheet({ type: "add" })} onBg=${() => showSheet({ type: "bg" })} />`}
 
+      ${undo && html`
+        <div className="toast" role="status">
+          <span>Операция удалена</span>
+          <button type="button" onClick=${undoDelete}>Отменить</button>
+        </div>`}
       ${sheet && sheet.type === "bg" && html`<${BgSheet} onClose=${close} />`}
       ${sheet && sheet.type === "add" && html`
         <${GoalScreen} onSubmit=${addGoal} onClose=${close} />`}

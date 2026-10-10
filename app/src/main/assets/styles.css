@@ -726,3 +726,24 @@ body::before { contain: strict; }
 .sheet { overscroll-behavior: contain; }
 .sheet-actions .btn { max-width: none; }
 .sheet.fit { touch-action: none; }
+
+/* Фон не должен «ехать», когда открывается клавиатура: слой фона держит высоту самого высокого окна (--bg-h задаёт app.js),
+   а не текущую уменьшенную. Клавиатура просто закрывает нижнюю часть картинки. */
+body::before { inset: 0 0 auto 0; height: var(--bg-h, 100%); }
+.fs-overlay { background: var(--app-base, #DCEBFC); isolation: isolate; }
+.fs-overlay::before {
+  content: ""; position: fixed; left: 0; right: 0; top: 0; height: var(--bg-h, 100%); z-index: -1; pointer-events: none;
+  background: linear-gradient(rgba(8, 10, 40, var(--app-veil, .22)), rgba(8, 10, 40, var(--app-veil, .22))), var(--app-bg, url("bg.blue.jpg")) center / cover no-repeat, var(--app-base, #DCEBFC);
+}
+
+/* форма: нативная прокрутка к полю тоже учитывает шапку и панель «Сохранить» */
+.fs-overlay { scroll-padding-top: 76px; scroll-padding-bottom: 110px; }
+/* «Операция удалена · Отменить» */
+.toast {
+  position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 66px); transform: translateX(-50%); z-index: 60;
+  display: flex; align-items: center; gap: 14px; max-width: calc(100% - 32px); padding: 10px 10px 10px 18px;
+  background: #0A2350; color: #fff; border-radius: 999px; font-size: 15px; box-shadow: 0 8px 22px rgba(10, 35, 80, .35);
+  animation: toast-in .22s ease-out;
+}
+.toast button { background: rgba(255, 255, 255, .18); color: #fff; border: 0; border-radius: 999px; padding: 8px 14px; font: inherit; font-weight: 700; }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
