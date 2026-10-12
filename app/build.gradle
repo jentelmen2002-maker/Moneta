@@ -10,8 +10,20 @@ android {
         applicationId "app.moneta"
         minSdk 24
         targetSdk 34
-        versionCode 1
+        // Номер версии растёт с каждой сборкой на GitHub: Android принимает установку «поверх» только если номер не меньше
+        versionCode (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
         versionName "1.0"
+    }
+
+    // Один и тот же ключ подписи для каждой сборки. Без него GitHub каждый раз создаёт новый ключ,
+    // и Android не даёт обновить приложение — приходится удалять старое (вместе с данными).
+    signingConfigs {
+        debug {
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
     }
 
     buildTypes {
