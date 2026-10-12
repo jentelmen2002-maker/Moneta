@@ -676,7 +676,7 @@ function Sheet({ label, onClose, children }) {
 const BG_KEY = "moneta-bg-v1", BG_PHOTO_KEY = "moneta-bg-photo-v1";
 const BG_PRESETS = [
   // tone: "light" — светлый фон, подписи на нём тёмные; "dark" — тёмный/яркий фон, подписи белые (+ затемнение veil)
-  { id: "blue", name: "Небо", css: 'url("bg.blue.jpg")', veil: 0, tone: "light", base: "#DCEBFC", theme: "#DCEBFC" },
+  { id: "blue", name: "Рассвет", css: 'url("bg.blue.jpg")', veil: 0, tone: "light", base: "#DCEBFC", theme: "#DCEBFC" },
   { id: "sunset", name: "Закат", css: "linear-gradient(180deg, #8F82A6 0%, #B79AA6 24%, #E6A08A 50%, #F2905A 76%, #F2693A 100%)", veil: 0.22, tone: "dark", base: "#8F82A6", theme: "#8F82A6" },
   { id: "mint", name: "Мята", css: "linear-gradient(160deg, #0F766E 0%, #34D399 55%, #A7F3D0 100%)", veil: 0.26, tone: "dark", base: "#0F766E", theme: "#0F766E" },
   { id: "night", name: "Ночь", css: "linear-gradient(170deg, #0B1020 0%, #1E1B4B 55%, #312E81 100%)", veil: 0, tone: "dark", base: "#0B1020", theme: "#0B1020" },
@@ -843,7 +843,7 @@ function StagesBuilder({ stages, setStages, onChange }) {
           </div>
           <div className="bsum">
             <div className="fin">
-              <${MoneyInput} id=${"sum-" + s.id} aria-label=${"Нужная сумма этапа " + (n + 1)} placeholder="Нужная сумма"
+              <${MoneyInput} id=${"sum-" + s.id} aria-label=${"Нужная сумма этапа " + (n + 1)} placeholder="1 000"
                              value=${s.target} onValue=${(v) => patch(s.id, { target: v })} />
               <span className="affix">₽</span>
             </div>
@@ -936,8 +936,8 @@ function GoalScreen({ initial, onSubmit, onClose }) {
   };
 
   const meta = staged ? { ask: "Что хотим сделать?" } : {
-    money: { ask: "На что копим?", label: "Какую сумму копим?", placeholder: "Например, 100 000", affix: "₽", integer: false },
-    goal: { ask: "Что хотим достичь?", label: "Целевое значение", placeholder: "Например, 10", affix: unit.trim(), integer: false },
+    money: { ask: "На что копим?", label: "Какую сумму копим?", placeholder: "1 000", affix: "₽", integer: false },
+    goal: { ask: "Что хотим достичь?", label: "Целевое значение", placeholder: "10", affix: unit.trim(), integer: false },
   }[type];
 
   const submit = (e) => {
@@ -1039,7 +1039,7 @@ function GoalScreen({ initial, onSubmit, onClose }) {
             <div className="fgroup">
               <label className="fl" htmlFor="f-unit">Единица измерения (необязательно)</label>
               <div className="fin">
-                <input id="f-unit" type="text" maxLength="16" placeholder="Например, км" autoComplete="off"
+                <input id="f-unit" type="text" maxLength="16" placeholder="км" autoComplete="off"
                        value=${unit} onInput=${(e) => { setUnit(e.target.value); setError(""); }} />
               </div>
               <div className="chips" role="group" aria-label="Частые единицы">
@@ -1066,7 +1066,7 @@ function GoalScreen({ initial, onSubmit, onClose }) {
                                onValue=${(v) => { setStartAmount(v); setError(""); }} />
                 <span className="affix">₽</span>
               </div>
-              <p className="hint-text">Уже накопленное: распределится по этапам по порядку</p>
+              <p className="hint-text">Начальная сумма распределится по этапам по порядку</p>
             </div>
           `}
 
@@ -1343,7 +1343,7 @@ function MeasureBar({ goal, onAdd }) {
       <form className="topup-row" onSubmit=${submit} noValidate>
         <div className="field">
           <span className="affix">+</span>
-          <${MoneyInput} aria-label=${"Значение" + (unit ? ", " + unit : "")} placeholder="Например, 5" value=${value}
+          <${MoneyInput} aria-label=${"Значение" + (unit ? ", " + unit : "")} placeholder="5" value=${value}
                          onValue=${(v) => { setValue(v); setError(""); }} />
           ${unit && html`<span className="affix">${unit}</span>`}
         </div>
