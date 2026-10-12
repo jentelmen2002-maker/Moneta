@@ -747,3 +747,7 @@ body::before { inset: 0 0 auto 0; height: var(--bg-h, 100%); }
 }
 .toast button { background: rgba(255, 255, 255, .18); color: #fff; border: 0; border-radius: 999px; padding: 8px 14px; font: inherit; font-weight: 700; }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* значок изображения: чёткий (сплошной цвет без прозрачности, целый размер, тонкая линия) */
+.avatar { color: #3A5585; }
+.avatar svg { width: 32px; height: 32px; stroke-width: 1.5; shape-rendering: geometricPrecision; display: block; }
