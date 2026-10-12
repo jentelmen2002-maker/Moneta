@@ -19,12 +19,12 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Проверка обновлений. Если есть интернет, раз в несколько часов спрашивает у GitHub последний релиз
+ * Проверка обновлений. Если есть интернет, не чаще раза в час спрашивает у GitHub последний релиз
  * (его создаёт сборка в GitHub Actions). Если номер сборки новее установленной, предлагает скачать APK.
  * Без интернета, при ошибке или в приватном репозитории молча ничего не делает: приложение работает как обычно.
  */
 final class UpdateChecker {
-    private static final long CHECK_EVERY_MS = 6L * 60 * 60 * 1000;   // не чаще раза в 6 часов
+    private static final long CHECK_EVERY_MS = 60L * 60 * 1000;        // не чаще раза в час
     private static final long SNOOZE_MS = 24L * 60 * 60 * 1000;       // «Позже» — не спрашивать сутки про ту же версию
 
     private UpdateChecker() {}
