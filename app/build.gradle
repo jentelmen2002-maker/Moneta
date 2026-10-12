@@ -11,7 +11,7 @@ android {
         minSdk 24
         targetSdk 34
         // Номер версии растёт с каждой сборкой на GitHub: Android принимает установку «поверх» только если номер не меньше
-        versionCode (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
+        versionCode Integer.parseInt(System.getenv("GITHUB_RUN_NUMBER") ?: "1")
         versionName "1.0"
         // Репозиторий, где искать новые версии: GitHub подставляет его сам при сборке (пусто — проверка выключена)
         buildConfigField "String", "UPDATE_REPO", "\"${System.getenv('GITHUB_REPOSITORY') ?: ''}\""
