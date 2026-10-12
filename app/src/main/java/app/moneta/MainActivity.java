@@ -109,6 +109,8 @@ public class MainActivity extends AppCompatActivity {
         } else {
             webView.loadUrl(START_URL);
         }
+
+        UpdateChecker.check(this); // если есть интернет и вышла новая версия — предложит обновиться
     }
 
     @Override
