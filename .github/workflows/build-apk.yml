@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write      # нужно, чтобы создать релиз с APK
     steps:
       - uses: actions/checkout@v4
 
@@ -34,3 +36,14 @@ jobs:
           name: Moneta-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # Публикуем APK как релиз: по нему приложение узнаёт, что вышла новая версия
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk Moneta.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Moneta (сборка ${{ github.run_number }})
+          files: Moneta.apk
