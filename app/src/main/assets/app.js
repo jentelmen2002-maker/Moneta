@@ -697,8 +697,12 @@ const BG_TONES = { // цвета подписей, лежащих прямо н�
   light: { text: "rgba(11, 42, 92, .80)", strong: "#0B2A5C", shadow: "none", error: "#C62839", line: "rgba(11, 42, 92, .22)" },
   dark: { text: "rgba(255, 255, 255, .92)", strong: "#FFFFFF", shadow: "0 1px 4px rgba(10, 8, 40, .55)", error: "#FFC2C2", line: "rgba(255, 255, 255, .45)" },
 };
+const darkMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+// Тёмная тема телефона: на светлых фонах подписи делаем чёрными (никаких своих тем в приложении нет, цвета остаются прежними)
+const BLACK_TONE = { text: "rgba(0, 0, 0, .88)", strong: "#000000", shadow: "none", error: "#B3001B", line: "rgba(0, 0, 0, .3)" };
 function applyBg(id) {
-  const o = bgCssOf(id), st = document.documentElement.style, t = BG_TONES[o.tone] || BG_TONES.dark;
+  const o = bgCssOf(id), st = document.documentElement.style;
+  const t = o.tone === "light" && darkMq && darkMq.matches ? BLACK_TONE : (BG_TONES[o.tone] || BG_TONES.dark);
   st.setProperty("--app-bg", o.css);
   st.setProperty("--app-veil", String(o.veil));
   st.setProperty("--app-base", o.base);
@@ -731,6 +735,7 @@ function bgFromFile(file) {
   });
 }
 applyBg(bgChoiceRead());
+if (darkMq && darkMq.addEventListener) darkMq.addEventListener("change", () => applyBg(bgChoiceRead()));
 // Высота фона = самая большая высота окна за сессию (при открытой клавиатуре окно становится ниже, и фон не должен перерисовываться)
 (function trackBgHeight() {
   const root = document.documentElement;

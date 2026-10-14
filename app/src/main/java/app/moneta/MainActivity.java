@@ -16,9 +16,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewAssetLoader;
-import androidx.webkit.WebViewFeature;
 
 /**
  * Оболочка Moneta: показывает локальные файлы из assets/ через WebView.
@@ -63,16 +61,6 @@ public class MainActivity extends AppCompatActivity {
         s.setAllowContentAccess(false);
         s.setMediaPlaybackRequiresUserGesture(true);
         s.setTextZoom(100);                    // не растягивать интерфейс системным масштабом шрифта
-
-        // Приложение только светлое: запрещаем системе принудительно затемнять страницу («тёмная тема для всех приложений»)
-        try {
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
-                WebSettingsCompat.setAlgorithmicDarkeningAllowed(s, false);
-            }
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
-                WebSettingsCompat.setForceDark(s, WebSettingsCompat.FORCE_DARK_OFF);
-            }
-        } catch (Throwable ignored) { /* на старых WebView этих функций нет */ }
 
         webView.setWebViewClient(new WebViewClient() {
             @Override

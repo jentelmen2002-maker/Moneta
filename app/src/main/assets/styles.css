@@ -100,7 +100,7 @@
     --field-line: #E2E2E2;
     --overlay: rgba(0, 0, 0, .42);
     --font: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
-    color-scheme: only light;
+    color-scheme: light;
     box-sizing: border-box;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -752,5 +752,7 @@ body::before { inset: 0 0 auto 0; height: var(--bg-h, 100%); }
 .avatar { color: #3A5585; }
 .avatar svg { width: 32px; height: 32px; stroke-width: 1.5; shape-rendering: geometricPrecision; display: block; }
 
-/* Приложение только светлое: не даём системной «тёмной темы» перекрашивать его */
-:root { color-scheme: only light; }
+/* Тёмная тема телефона: весь текст чёрный (фон и плашки остаются светлыми, как были) */
+@media (prefers-color-scheme: dark) {
+  :root { --ink: #000; --muted: rgba(0, 0, 0, .72); }
+}
