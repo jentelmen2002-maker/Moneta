@@ -756,3 +756,26 @@ body::before { inset: 0 0 auto 0; height: var(--bg-h, 100%); }
 @media (prefers-color-scheme: dark) {
   :root { --ink: #000; --muted: rgba(0, 0, 0, .72); }
 }
+
+/* ===== Хрустальное стекло: почти прозрачная плашка, косой блик, светящаяся голубовато-белая кромка ===== */
+:root {
+  --cr-bg: linear-gradient(135deg, rgba(255, 255, 255, .42) 0%, rgba(255, 255, 255, .12) 42%, rgba(255, 255, 255, .10) 62%, rgba(255, 255, 255, .34) 100%);
+  --cr-line: rgba(214, 248, 255, .95);
+  --cr-glow: inset 0 0 0 1px rgba(255, 255, 255, .35), inset 0 0 22px rgba(150, 232, 255, .30), 0 0 16px rgba(110, 215, 255, .38), 0 12px 30px rgba(20, 60, 140, .16);
+}
+.goal-card, .hero, .stage, .day, .fs-head, .swatches, .bstage, .seg, .seg.blue, .fin, .field, .pill, .stage-state, .stage-state.wait, .btn-plain, .cbtn-cancel, .avatar, .fab, .chip {
+  background: rgba(255, 255, 255, .16); background-image: var(--cr-bg);
+  border: 1.5px solid var(--cr-line); box-shadow: var(--cr-glow);
+}
+.goal-card, .stage, .day, .hero { border-radius: 28px; }
+.fin, .field { background-color: rgba(255, 255, 255, .34); }
+.pill, .stage-state, .stage-state.wait, .btn-plain, .cbtn-cancel { background-color: rgba(255, 255, 255, .42); }
+.seg-ind { background: rgba(255, 255, 255, .78); border-color: #fff; box-shadow: 0 0 12px rgba(120, 220, 255, .55); }
+.seg.blue .seg-ind { background: var(--btn); border-color: rgba(214, 248, 255, .9); box-shadow: 0 0 12px rgba(80, 170, 255, .55); }
+.goal-card:active { background-color: rgba(255, 255, 255, .34); }
+.actionbar, .sheet {
+  background-color: rgba(246, 251, 255, .80); background-image: var(--cr-bg);
+  border: 1.5px solid var(--cr-line); box-shadow: var(--cr-glow);
+}
+.actionbar { border-bottom: none; }
+.fab { background-color: rgba(255, 255, 255, .30); }

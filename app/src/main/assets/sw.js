@@ -1,6 +1,6 @@
 /* Moneta — Service Worker: полностью офлайн-приложение.
    Чтобы выпустить обновление, увеличьте номер в VERSION: старый кэш будет удалён автоматически. */
-const VERSION = "moneta-v39";
+const VERSION = "moneta-v40";
 
 const ASSETS = [
   "./",
