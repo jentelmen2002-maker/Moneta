@@ -702,10 +702,11 @@ const darkMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dar
 const BLACK_TONE = { text: "rgba(0, 0, 0, .88)", strong: "#000000", shadow: "none", error: "#B3001B", line: "rgba(0, 0, 0, .3)" };
 function applyBg(id) {
   const o = bgCssOf(id), st = document.documentElement.style;
-  const t = o.tone === "light" && darkMq && darkMq.matches ? BLACK_TONE : (BG_TONES[o.tone] || BG_TONES.dark);
+  const dim = o.tone === "light" && darkMq && darkMq.matches; // тёмный режим телефона + светлый фон
+  const t = dim ? BLACK_TONE : (BG_TONES[o.tone] || BG_TONES.dark);
   st.setProperty("--app-bg", o.css);
-  st.setProperty("--app-veil", String(o.veil));
-  st.setProperty("--app-base", o.base);
+  st.setProperty("--app-veil", String(dim ? Math.max(o.veil, 0.46) : o.veil)); // фон темнее, но чёрный текст ещё читается
+  st.setProperty("--app-base", dim ? "#6F7C9C" : o.base);
   st.setProperty("--on-bg", t.text); st.setProperty("--on-bg-strong", t.strong); st.setProperty("--on-bg-shadow", t.shadow);
   st.setProperty("--on-bg-error", t.error); st.setProperty("--on-bg-line", t.line);
   const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", o.theme);
@@ -1688,7 +1689,7 @@ function App() {
 ReactDOM.createRoot(document.getElementById("root")).render(html`<${App} />`);
 
 /* ---------- PWA: офлайн-режим ---------- */
-if ("serviceWorker" in navigator && location.hostname !== "appassets.androidplatform.net") {
+if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(() => { /* нужен HTTPS или localhost */ });
   });
